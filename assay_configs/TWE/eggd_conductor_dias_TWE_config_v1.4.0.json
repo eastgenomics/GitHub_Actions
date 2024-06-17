@@ -2,7 +2,7 @@
     "name": "Config for Twist whole exome assay",
     "assay": "TWE",
     "assay_code": "-EGG4|-9526-|-9688-",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "details": "Includes main Dias workflows: single, multi and QC reports",
     "changelog": {
         "v1.0.0": "Initial working version",
