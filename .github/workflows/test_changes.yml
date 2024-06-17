@@ -1,8 +1,6 @@
 name: check_new_version
 on:
-  pull_request:
-    branches:
-      - main
+  pull_request
 
 jobs:
   upload_and_test:
