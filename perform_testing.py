@@ -2,8 +2,10 @@ import argparse
 import dxpy as dx
 import json
 import re
+import subprocess
 
 from collections import defaultdict
+from datetime import datetime
 from packaging.version import Version, parse
 
 
@@ -44,7 +46,7 @@ class DXManage():
     """
     def __init__(self, args) -> None:
         self.args = args
-
+        self.today_date = datetime.today().strftime('%Y-%m-%d')
 
     @staticmethod
     def read_in_json(config_file) -> dict:
@@ -70,6 +72,34 @@ class DXManage():
             config_dict = json.load(json_file)
 
         return config_dict
+
+    # def upload_config_to_DNAnexus(self, test_project_id) -> str:
+    #     """
+    #     Upload the updated config file to DNAnexus test project
+
+    #     Parameters
+    #     ----------
+    #     config_file : str
+    #         name of JSON config file to upload
+
+    #     Returns
+    #     -------
+    #     file_id : str
+    #         the ID of the uploaded config file
+    #     """
+    #     # Upload the config file to DNAnexus
+    #     config_file_id = dx.upload_local_file(
+    #         filename=self.args.input_config,
+    #         project=test_project_id
+    #     ).get_id()
+
+    #     print(
+    #         f"\nUpdated config file uploaded to DNAnexus ."
+    #         f"File ID: {config_file_id}\n"
+    #     )
+
+
+    #     return config_file_id
 
     def get_json_configs_in_DNAnexus(self) -> dict:
         """
@@ -124,6 +154,7 @@ class DXManage():
 
                 # add file ID as field into the config file
                 config_data['file_id'] = file['id']
+                config_data['file_name'] = dx.describe(file['id'])['name']
                 all_configs.append(config_data)
             else:
                 print(
@@ -278,6 +309,7 @@ class DXManage():
         ])
 
         # Get assay code and version info from updated config
+        updated_config_name = dx.describe(updated_config_id)['name']
         updated_config_code = updated_config.get('assay_code')
         updated_config_version = updated_config.get('version')
 
@@ -298,10 +330,12 @@ class DXManage():
             ]
 
             # Add version and file ID of the config file updated in the PR
+            changed_config_to_prod['updated']['name'] = updated_config_name
             changed_config_to_prod['updated']['version'] = updated_config_version
             changed_config_to_prod['updated']['file_id'] = updated_config_id
 
             # Add version and file ID of the related prod config file
+            changed_config_to_prod['prod']['name'] = prod_configs[latest_config_key]['file_name']
             changed_config_to_prod['prod']['version'] = highest_ver_config
             changed_config_to_prod['prod']['file_id'] = prod_configs[
                 latest_config_key
@@ -313,6 +347,68 @@ class DXManage():
         )
         return changed_config_to_prod
 
+    def report_config_changes(self, changed_config_to_prod):
+        """
+        Compare the updated config file to the prod config file
+
+        Parameters
+        ----------
+        config_1 : file
+            the production JSON config
+        config_2 : file
+            the updated JSON config
+        """
+        keys = ['file_id', 'name']
+        config_1_id, config_1_name = list(
+            map(changed_config_to_prod['prod'].get, keys)
+        )
+        config_2_id, config_2_name = list(
+            map(changed_config_to_prod['updated'].get, keys)
+        )
+
+        cmd = (
+            f"icdiff --unified=0 --line-numbers <(dx cat {config_1_id}) -L "
+            f"{config_1_name} <(dx cat {config_2_id}) -L {config_2_name} "
+            "| aha > config_diff.html"
+        )
+
+        output = subprocess.run(
+            cmd, shell=True, capture_output=True, executable="/bin/bash"
+        )
+
+        return output
+
+    def find_latest_run_for_assay(self, assay):
+        """
+        _summary_
+
+        Parameters
+        ----------
+        assay : _type_
+            _description_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
+        assay_projects_002 = list(dx.find_projects(
+            name=f'002*{assay}',
+            name_mode='glob',
+            describe=True,
+            created_after=self.today_date
+        ))
+
+        most_recent_project_dict = max(
+            assay_projects_002, key=lambda x: x['describe']['created']
+        )
+
+        most_recent_project_name = most_recent_project_dict['describe']['name']
+
+        print(most_recent_project_name)
+
+        return most_recent_project_name
+
 
 def main():
     args = parse_args()
@@ -322,9 +418,10 @@ def main():
 
     config_data = dx_manage.get_json_configs_in_DNAnexus()
     configs_to_use = dx_manage.filter_highest_config_version(config_data)
-    dx_manage.match_updated_config_to_prod_config(
+    changed_config_to_prod = dx_manage.match_updated_config_to_prod_config(
         changed_config_dict, args.file_id, configs_to_use
     )
+    dx_manage.report_config_changes(changed_config_to_prod)
 
 if __name__ == '__main__':
     main()
