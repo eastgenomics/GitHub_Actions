@@ -47,3 +47,7 @@ jobs:
           FILE_ID: ${{ steps.changed-config.outputs.FILE_ID }}
         run: |
           python perform_testing.py -i ${CHANGED_FILES} -f ${FILE_ID}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diff-report
+          path: diff_report.html
