@@ -73,34 +73,6 @@ class DXManage():
 
         return config_dict
 
-    # def upload_config_to_DNAnexus(self, test_project_id) -> str:
-    #     """
-    #     Upload the updated config file to DNAnexus test project
-
-    #     Parameters
-    #     ----------
-    #     config_file : str
-    #         name of JSON config file to upload
-
-    #     Returns
-    #     -------
-    #     file_id : str
-    #         the ID of the uploaded config file
-    #     """
-    #     # Upload the config file to DNAnexus
-    #     config_file_id = dx.upload_local_file(
-    #         filename=self.args.input_config,
-    #         project=test_project_id
-    #     ).get_id()
-
-    #     print(
-    #         f"\nUpdated config file uploaded to DNAnexus ."
-    #         f"File ID: {config_file_id}\n"
-    #     )
-
-
-    #     return config_file_id
-
     def get_json_configs_in_DNAnexus(self) -> dict:
         """
         Query path in DNAnexus for json config files for each assay, returning
@@ -110,7 +82,7 @@ class DXManage():
 
         Returns
         -------
-        list
+        all_configs: list
             list of dicts of the json object for each config file found
 
         Raises
@@ -150,9 +122,10 @@ class DXManage():
             if file['describe']['archivalState'] == 'live':
                 config_data = json.loads(
                     dx.bindings.dxfile.DXFile(
-                        project=file['project'], dxid=file['id']).read())
+                        project=file['project'], dxid=file['id']).read()
+                    )
 
-                # add file ID as field into the config file
+                # add file ID and name as field into the config file
                 config_data['file_id'] = file['id']
                 config_data['file_name'] = dx.describe(file['id'])['name']
                 all_configs.append(config_data)
@@ -163,7 +136,6 @@ class DXManage():
                 )
 
         return all_configs
-
 
     @staticmethod
     def filter_highest_config_version(all_configs) -> dict:
@@ -294,14 +266,19 @@ class DXManage():
         updated_config_id: str
             DNAnexus file ID of updated config
         prod_configs : dict
-            dict where keys are unique assay codes and values are full
-            config as a dict
+            dict where keys are unique assay codes and values are dicts
+            representing full prod configs
 
         Returns
         -------
         changed_config_to_prod : dict
             dict with info about the changed config and the related prod
-            config
+            config for the assay with the highest version
+
+        Raises
+        ------
+        AssertionError
+            Raised when non-zero exit code returned by icdiff
         """
         changed_config_to_prod = defaultdict(dict)
         prod_config_assay_codes = sorted([
@@ -349,14 +326,19 @@ class DXManage():
 
     def report_config_changes(self, changed_config_to_prod):
         """
-        Compare the updated config file to the prod config file
+        Compare the config updated in the PR to the prod config file
 
         Parameters
         ----------
-        config_1 : file
-            the production JSON config
-        config_2 : file
-            the updated JSON config
+        changed_config_to_prod : dict
+            dict which contains info on the updated config and the related
+            prod config
+
+        Returns
+        -------
+        output : dict
+            dict with info about the changed config and the related prod
+            config for the assay with the highest version
         """
         keys = ['file_id', 'name']
         config_1_id, config_1_name = list(
@@ -373,14 +355,25 @@ class DXManage():
         )
 
         output = subprocess.run(
-            cmd, shell=True, capture_output=True, executable="/bin/bash"
+            cmd,
+            shell=True,
+            capture_output=True,
+            executable="/bin/bash"
+        )
+
+        assert output.returncode == 0, (
+            f"\n\tError in running icdiff. Files: {config_1_name} and "
+            f"{config_2_name} not compared."
+            f"\n\tExitcode:{output.returncode}"
+            f"\n\t{output.stderr.decode()}"
         )
 
         return output
 
     def find_latest_run_for_assay(self, assay):
         """
-        _summary_
+        Find recent production (002) runs in DNAnexus for the given assay
+        so that we can later set off conductor using this run as an example
 
         Parameters
         ----------
@@ -415,13 +408,15 @@ def main():
     dx_manage = DXManage(args)
 
     changed_config_dict = dx_manage.read_in_json(args.input_config)
-
     config_data = dx_manage.get_json_configs_in_DNAnexus()
     configs_to_use = dx_manage.filter_highest_config_version(config_data)
     changed_config_to_prod = dx_manage.match_updated_config_to_prod_config(
         changed_config_dict, args.file_id, configs_to_use
     )
     dx_manage.report_config_changes(changed_config_to_prod)
+    latest_project = dx_manage.find_latest_run_for_assay(
+        changed_config_dict['assay']
+    )
 
 if __name__ == '__main__':
     main()

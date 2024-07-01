@@ -40,7 +40,7 @@ jobs:
           echo "Config file uploaded. File ID: $FILE_ID"
           echo "FILE_ID=$FILE_ID" >> $GITHUB_OUTPUT
 
-      - name: Run Python script
+      - name: Run Python script and upload diff report
         if: steps.changed-files.outputs.any_changed == 'true'
         env:
           CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
