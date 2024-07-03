@@ -7,7 +7,7 @@ from collections import defaultdict
 from packaging.version import Version, parse
 
 
-def parse_args(argv=None) -> argparse.Namespace:
+def parse_args() -> argparse.Namespace:
     """
     Parse command line arguments
 
@@ -44,7 +44,6 @@ class DXManage():
     """
     def __init__(self, args) -> None:
         self.args = args
-
 
     @staticmethod
     def read_in_json(config_file) -> dict:
@@ -110,7 +109,7 @@ class DXManage():
             f"No config files found in given path: {project}:{path}"
         )
 
-        files_ids='\n\t'.join([
+        files_ids = '\n\t'.join([
             f"{x['describe']['name']} ({x['id']} - "
             f"{x['describe']['archivalState']})" for x in files])
         print(f"\nAssay config files found:\n\t{files_ids}")
@@ -132,7 +131,6 @@ class DXManage():
                 )
 
         return all_configs
-
 
     @staticmethod
     def filter_highest_config_version(all_configs) -> dict:
@@ -219,7 +217,7 @@ class DXManage():
                 if uniq_code in full_code.split('|'):
                     # this single assay code is in the full assay code
                     # parsed from config, add match as 'assay_code': 'version'
-                    matches[full_code] =  all_assay_codes[full_code]
+                    matches[full_code] = all_assay_codes[full_code]
 
             # check we don't have 2 matches with the same version as we
             # can't tell which to use, i.e. EGG2 : 1.0.0 & EGG2|LAB123 : 1.0.0
@@ -234,13 +232,14 @@ class DXManage():
             # then select the full config file data for it
             full_code_to_use = max(matches, key=parse)
             configs_to_use[
-                full_code_to_use] = highest_version_config_data[full_code_to_use]
+                full_code_to_use
+            ] = highest_version_config_data[full_code_to_use]
 
         # add to log record of highest version of each config found
-        usable_configs = '\n\t'.join(
-            [f"{k} ({v['version']}): {v['file_id']}"
-            for k, v in configs_to_use.items()]
-        )
+        usable_configs = '\n\t'.join([
+            f"{k} ({v['version']}): {v['file_id']}"
+            for k, v in configs_to_use.items()
+        ])
 
         print(
             "\nHighest versions of assay configs found to use:"
@@ -298,7 +297,9 @@ class DXManage():
             ]
 
             # Add version and file ID of the config file updated in the PR
-            changed_config_to_prod['updated']['version'] = updated_config_version
+            changed_config_to_prod['updated'][
+                'version'
+            ] = updated_config_version
             changed_config_to_prod['updated']['file_id'] = updated_config_id
 
             # Add version and file ID of the related prod config file
@@ -325,6 +326,7 @@ def main():
     dx_manage.match_updated_config_to_prod_config(
         changed_config_dict, args.file_id, configs_to_use
     )
+
 
 if __name__ == '__main__':
     main()
