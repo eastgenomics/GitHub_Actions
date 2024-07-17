@@ -4,7 +4,6 @@ import json
 import re
 
 from collections import defaultdict
-from datetime import datetime
 from packaging.version import Version, parse
 
 
@@ -45,7 +44,6 @@ class DXManage():
     """
     def __init__(self, args) -> None:
         self.args = args
-        self.today_date = datetime.today().strftime('%Y-%m-%d')
 
     @staticmethod
     def read_in_json(config_file) -> dict:
@@ -111,7 +109,7 @@ class DXManage():
             f"No config files found in given path: {project}:{path}"
         )
 
-        files_ids='\n\t'.join([
+        files_ids = '\n\t'.join([
             f"{x['describe']['name']} ({x['id']} - "
             f"{x['describe']['archivalState']})" for x in files])
         print(f"\nAssay config files found:\n\t{files_ids}")
@@ -124,7 +122,7 @@ class DXManage():
                         project=file['project'], dxid=file['id']).read()
                     )
 
-                # add file ID and name as field into the config file
+                # add file ID and name as fields into the config data
                 config_data['file_id'] = file['id']
                 config_data['file_name'] = dx.describe(file['id'])['name']
                 all_configs.append(config_data)
@@ -221,7 +219,7 @@ class DXManage():
                 if uniq_code in full_code.split('|'):
                     # this single assay code is in the full assay code
                     # parsed from config, add match as 'assay_code': 'version'
-                    matches[full_code] =  all_assay_codes[full_code]
+                    matches[full_code] = all_assay_codes[full_code]
 
             # check we don't have 2 matches with the same version as we
             # can't tell which to use, i.e. EGG2 : 1.0.0 & EGG2|LAB123 : 1.0.0
