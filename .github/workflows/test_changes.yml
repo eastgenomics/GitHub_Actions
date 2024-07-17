@@ -51,12 +51,13 @@ jobs:
       - name: Generate diff report compared to production config
         if: steps.changed-files.outputs.any_changed == 'true'
         env:
-          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
           UPLOADED_FILE_ID: ${{ steps.changed-config.outputs.FILE_ID }}
         run: |
           PROD_CONFIG_ID=$(jq -r .prod.file_id config_diff.json)
           PROD_CONFIG_NAME=$(jq -r .prod.name config_diff.json)
-          icdiff --unified=0 --line-numbers <(dx cat ${PROD_CONFIG_ID}) -L ${PROD_CONFIG_NAME} <(dx cat ${UPLOADED_FILE_ID}) -L ${CHANGED_FILES} | aha > config_diff.html
+          UPDATED_CONFIG_NAME=$(jq -r .updated.name config_diff.json)
+
+          icdiff --unified=0 --line-numbers <(dx cat ${PROD_CONFIG_ID}) -L ${PROD_CONFIG_NAME} <(dx cat ${UPLOADED_FILE_ID}) -L ${UPDATED_CONFIG_NAME} | aha > config_diff.html
           echo "Diff report generated"
       - uses: actions/upload-artifact@v4
         with:
