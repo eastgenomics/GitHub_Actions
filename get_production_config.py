@@ -324,83 +324,97 @@ class DXManage():
         )
         return changed_config_to_prod
 
-    def report_config_changes(self, changed_config_to_prod):
+    def write_out_config_info(self, changed_config_to_prod, file_name):
         """
-        Compare the config updated in the PR to the prod config file
+        Write out the updated vs prod config dictionary to a JSON file
 
         Parameters
         ----------
         changed_config_to_prod : dict
-            dict which contains info on the updated config and the related
-            prod config
-
-        Returns
-        -------
-        output : dict
-            dict with info about the changed config and the related prod
-            config for the assay with the highest version
-        """
-        keys = ['file_id', 'name']
-        config_1_id, config_1_name = list(
-            map(changed_config_to_prod['prod'].get, keys)
-        )
-        config_2_id, config_2_name = list(
-            map(changed_config_to_prod['updated'].get, keys)
-        )
-
-        cmd = (
-            f"icdiff --unified=0 --line-numbers <(dx cat {config_1_id}) -L "
-            f"{config_1_name} <(dx cat {config_2_id}) -L {config_2_name} "
-            "| aha > config_diff.html"
-        )
-
-        output = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            executable="/bin/bash"
-        )
-
-        assert output.returncode == 0, (
-            f"\n\tError in running icdiff. Files: {config_1_name} and "
-            f"{config_2_name} not compared."
-            f"\n\tExitcode:{output.returncode}"
-            f"\n\t{output.stderr.decode()}"
-        )
-
-        return output
-
-    def find_latest_run_for_assay(self, assay):
-        """
-        Find recent production (002) runs in DNAnexus for the given assay
-        so that we can later set off conductor using this run as an example
-
-        Parameters
-        ----------
-        assay : _type_
             _description_
-
-        Returns
-        -------
-        _type_
-            _description_
+        file_name: str
+            name of JSON file to write out
         """
-        assay_projects_002 = list(dx.find_projects(
-            name=f'002*{assay}',
-            name_mode='glob',
-            describe=True,
-            created_after=self.today_date
-        ))
+        with open(file_name, 'w', encoding='utf8') as json_file:
+            json.dump(changed_config_to_prod, json_file, indent=4)
 
-        most_recent_project_dict = max(
-            assay_projects_002, key=lambda x: x['describe']['created']
-        )
+    # def report_config_changes(self, changed_config_to_prod):
+    #     """
+    #     Compare the config updated in the PR to the prod config file
 
-        most_recent_project_name = most_recent_project_dict['describe']['name']
+    #     Parameters
+    #     ----------
+    #     changed_config_to_prod : dict
+    #         dict which contains info on the updated config and the related
+    #         prod config
 
-        print(most_recent_project_name)
+    #     Returns
+    #     -------
+    #     output : dict
+    #         dict with info about the changed config and the related prod
+    #         config for the assay with the highest version
+    #     """
+    #     keys = ['file_id', 'name']
+    #     config_1_id, config_1_name = list(
+    #         map(changed_config_to_prod['prod'].get, keys)
+    #     )
+    #     config_2_id, config_2_name = list(
+    #         map(changed_config_to_prod['updated'].get, keys)
+    #     )
 
-        return most_recent_project_name
+    #     cmd = (
+    #         f"icdiff --unified=0 --line-numbers <(dx cat {config_1_id}) -L "
+    #         f"{config_1_name} <(dx cat {config_2_id}) -L {config_2_name} "
+    #         "| aha > config_diff.html"
+    #     )
+
+    #     output = subprocess.run(
+    #         cmd,
+    #         shell=True,
+    #         capture_output=True,
+    #         executable="/bin/bash"
+    #     )
+
+    #     assert output.returncode == 0, (
+    #         f"\n\tError in running icdiff. Files: {config_1_name} and "
+    #         f"{config_2_name} not compared."
+    #         f"\n\tExitcode:{output.returncode}"
+    #         f"\n\t{output.stderr.decode()}"
+    #     )
+
+    #     return output
+
+    # def find_latest_run_for_assay(self, assay):
+    #     """
+    #     Find recent production (002) runs in DNAnexus for the given assay
+    #     so that we can later set off conductor using this run as an example
+
+    #     Parameters
+    #     ----------
+    #     assay : _type_
+    #         _description_
+
+    #     Returns
+    #     -------
+    #     _type_
+    #         _description_
+    #     """
+    #     assay_projects_002 = list(dx.find_projects(
+    #         name=f'002*{assay}',
+    #         name_mode='glob',
+    #         describe=True,
+    #         created_after=self.today_date
+    #     ))
+
+    #     most_recent_project_dict = max(
+    #         assay_projects_002, key=lambda x: x['describe']['created']
+    #     )
+
+    #     most_recent_project_name = most_recent_project_dict['describe']['name']
+
+    #     print(most_recent_project_name)
+
+    #     return most_recent_project_name
 
 
 def main():
@@ -413,10 +427,11 @@ def main():
     changed_config_to_prod = dx_manage.match_updated_config_to_prod_config(
         changed_config_dict, args.file_id, configs_to_use
     )
-    dx_manage.report_config_changes(changed_config_to_prod)
-    latest_project = dx_manage.find_latest_run_for_assay(
-        changed_config_dict['assay']
-    )
+    dx_manage.write_out_config_info(changed_config_to_prod, 'config_diff.json')
+    # dx_manage.report_config_changes(changed_config_to_prod)
+    # latest_project = dx_manage.find_latest_run_for_assay(
+    #     changed_config_dict['assay']
+    # )
 
 if __name__ == '__main__':
     main()
