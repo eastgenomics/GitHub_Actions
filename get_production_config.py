@@ -2,14 +2,13 @@ import argparse
 import dxpy as dx
 import json
 import re
-import subprocess
 
 from collections import defaultdict
 from datetime import datetime
 from packaging.version import Version, parse
 
 
-def parse_args(argv=None) -> argparse.Namespace:
+def parse_args() -> argparse.Namespace:
     """
     Parse command line arguments
 
