@@ -1,3 +1,4 @@
 dxpy==0.378.0
 icdiff==2.0.7
-packaging==21.3
+packaging==20.4
+setuptools==71.0.2
