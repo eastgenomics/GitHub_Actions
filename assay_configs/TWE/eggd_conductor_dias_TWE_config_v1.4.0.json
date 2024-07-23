@@ -9,7 +9,8 @@
         "v1.1.0": "Updated dias_single and dias_multi workflows, specifying input files",
         "v1.1.1": "Updated somalier genome reference projects",
         "v1.2.0": "Updated input files for dias_multi and MultiQC",
-        "v1.3.0": "Updated workflow ID and name for dias_single"
+        "v1.3.0": "Updated workflow ID and name for dias_single",
+        "v1.4.0": "foo"
     },
     "demultiplex": true,
     "demultiplex_config": {
