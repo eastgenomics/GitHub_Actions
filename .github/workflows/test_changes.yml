@@ -1,11 +1,31 @@
-name: check_new_version
-on:
-  pull_request
+name: Perform integration testing
+on: [pull_request]
 
 jobs:
+  get_changed_json_files:
+    runs-on: ubuntu-latest
+    name: Get changed files
+
+    outputs:
+      any_changed: ${{ steps.changed-files.outputs.any_changed }}
+      all_changed_files: ${{ steps.changed-files.outputs.all_changed_files }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get changed JSON files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **.json
+
   upload_and_test:
+    needs: get_changed_json_files
+    if: needs.get_changed_json_files.outputs.any_changed == 'true'
     runs-on: ubuntu-latest
     name: Upload and test changed files
+
     steps:
       - uses: actions/checkout@v4
 
@@ -18,19 +38,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          sudo apt-get install -y aha
 
-      - name: Get changed JSON files
-        id: changed-files
-        uses: tj-actions/changed-files@v44
-        with:
-          files: |
-            **.json
-
-      - name: Upload changed JSON files to DNAnexus
+      - name: Upload changed JSON config file to DNAnexus
         id: changed-config
-        if: steps.changed-files.outputs.any_changed == 'true'
         env:
-          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+          CHANGED_FILES: ${{ needs.get_changed_json_files.outputs.all_changed_files }}
         run: |
           dx login --token ${{ secrets.DX_TOKEN }}
           echo "${CHANGED_FILES} was changed in this PR"
@@ -38,11 +51,24 @@ jobs:
           echo "Config file uploaded. File ID: $FILE_ID"
           echo "FILE_ID=$FILE_ID" >> $GITHUB_OUTPUT
 
-      - name: Run Python script
+      - name: Get production config in DNAnexus and output JSON with config info
         env:
-          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
-          FILE_ID: ${{ steps.changed-config.outputs.FILE_ID }}
+          CHANGED_FILES: ${{ needs.get_changed_json_files.outputs.all_changed_files }}
+          UPDLOADED_FILE_ID: ${{ steps.changed-config.outputs.FILE_ID }}
         run: |
-          echo ${ALL_CHANGED_FILES}
-          echo ${FILE_ID}
-          python perform_testing.py -i ${ALL_CHANGED_FILES} -f ${FILE_ID}
+          python get_production_config.py -i ${CHANGED_FILES} -f ${UPDLOADED_FILE_ID}
+
+      - name: Generate diff report compared to production config
+        env:
+          UPLOADED_FILE_ID: ${{ steps.changed-config.outputs.FILE_ID }}
+        run: |
+          PROD_CONFIG_ID=$(jq -r .prod.file_id config_diff.json)
+          PROD_CONFIG_NAME=$(jq -r .prod.name config_diff.json)
+          UPDATED_CONFIG_NAME=$(jq -r .updated.name config_diff.json)
+
+          icdiff --unified=0 --line-numbers <(dx cat ${PROD_CONFIG_ID}) -L ${PROD_CONFIG_NAME} <(dx cat ${UPLOADED_FILE_ID}) -L ${UPDATED_CONFIG_NAME} | aha > config_diff.html
+          echo "Diff report generated"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diff-report
+          path: config_diff.html

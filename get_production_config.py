@@ -79,7 +79,7 @@ class DXManage():
 
         Returns
         -------
-        list
+        all_configs: list
             list of dicts of the json object for each config file found
 
         Raises
@@ -119,10 +119,12 @@ class DXManage():
             if file['describe']['archivalState'] == 'live':
                 config_data = json.loads(
                     dx.bindings.dxfile.DXFile(
-                        project=file['project'], dxid=file['id']).read())
+                        project=file['project'], dxid=file['id']).read()
+                    )
 
-                # add file ID as field into the config file
+                # add file ID and name as fields into the config data
                 config_data['file_id'] = file['id']
+                config_data['file_name'] = dx.describe(file['id'])['name']
                 all_configs.append(config_data)
             else:
                 print(
@@ -232,14 +234,13 @@ class DXManage():
             # then select the full config file data for it
             full_code_to_use = max(matches, key=parse)
             configs_to_use[
-                full_code_to_use
-            ] = highest_version_config_data[full_code_to_use]
+                full_code_to_use] = highest_version_config_data[full_code_to_use]
 
         # add to log record of highest version of each config found
-        usable_configs = '\n\t'.join([
-            f"{k} ({v['version']}): {v['file_id']}"
-            for k, v in configs_to_use.items()
-        ])
+        usable_configs = '\n\t'.join(
+            [f"{k} ({v['version']}): {v['file_id']}"
+            for k, v in configs_to_use.items()]
+        )
 
         print(
             "\nHighest versions of assay configs found to use:"
@@ -262,14 +263,19 @@ class DXManage():
         updated_config_id: str
             DNAnexus file ID of updated config
         prod_configs : dict
-            dict where keys are unique assay codes and values are full
-            config as a dict
+            dict where keys are unique assay codes and values are dicts
+            representing full prod configs
 
         Returns
         -------
         changed_config_to_prod : dict
             dict with info about the changed config and the related prod
-            config
+            config for the assay with the highest version
+
+        Raises
+        ------
+        AssertionError
+            Raised when non-zero exit code returned by icdiff
         """
         changed_config_to_prod = defaultdict(dict)
         prod_config_assay_codes = sorted([
@@ -277,6 +283,7 @@ class DXManage():
         ])
 
         # Get assay code and version info from updated config
+        updated_config_name = dx.describe(updated_config_id)['name']
         updated_config_code = updated_config.get('assay_code')
         updated_config_version = updated_config.get('version')
 
@@ -297,12 +304,12 @@ class DXManage():
             ]
 
             # Add version and file ID of the config file updated in the PR
-            changed_config_to_prod['updated'][
-                'version'
-            ] = updated_config_version
+            changed_config_to_prod['updated']['name'] = updated_config_name
+            changed_config_to_prod['updated']['version'] = updated_config_version
             changed_config_to_prod['updated']['file_id'] = updated_config_id
 
             # Add version and file ID of the related prod config file
+            changed_config_to_prod['prod']['name'] = prod_configs[latest_config_key]['file_name']
             changed_config_to_prod['prod']['version'] = highest_ver_config
             changed_config_to_prod['prod']['file_id'] = prod_configs[
                 latest_config_key
@@ -314,19 +321,31 @@ class DXManage():
         )
         return changed_config_to_prod
 
+    def write_out_config_info(self, changed_config_to_prod, file_name):
+        """
+        Write out the updated vs prod config dictionary to a JSON file
+
+        Parameters
+        ----------
+        changed_config_to_prod : dict
+            _description_
+        file_name: str
+            name of JSON file to write out
+        """
+        with open(file_name, 'w', encoding='utf8') as json_file:
+            json.dump(changed_config_to_prod, json_file, indent=4)
 
 def main():
     args = parse_args()
     dx_manage = DXManage(args)
 
     changed_config_dict = dx_manage.read_in_json(args.input_config)
-
     config_data = dx_manage.get_json_configs_in_DNAnexus()
     configs_to_use = dx_manage.filter_highest_config_version(config_data)
-    dx_manage.match_updated_config_to_prod_config(
+    changed_config_to_prod = dx_manage.match_updated_config_to_prod_config(
         changed_config_dict, args.file_id, configs_to_use
     )
-
+    dx_manage.write_out_config_info(changed_config_to_prod, 'config_diff.json')
 
 if __name__ == '__main__':
     main()
