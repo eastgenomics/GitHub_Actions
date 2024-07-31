@@ -39,6 +39,17 @@ def parse_args() -> argparse.Namespace:
         help="Name of the file to write the testing project ID to"
     )
 
+    parser.add_argument(
+        '-u',
+        '--run_url',
+        required=True,
+        type=str,
+        help=(
+            "URL of this GitHub Actions run to be included in the testing "
+            "project description"
+        )
+    )
+
     return parser.parse_args()
 
 
@@ -108,7 +119,8 @@ class DXManage():
                         'createdBy': True
                     }
                 }
-        ))
+            )
+        )
 
         if not existing_projects:
             return None
@@ -120,7 +132,7 @@ class DXManage():
 
         return existing_projects
 
-    def get_or_create_dx_project(self, changed_config_name):
+    def get_or_create_dx_project(self, changed_config_name, actions_url):
         """
         If a testing project for the updated config file exists, get the ID
         of that project. If one does not exist, make a new project for testing
@@ -130,6 +142,9 @@ class DXManage():
         changed_config_name : str
             name of the config file which has been updated
             e.g. dias_TWE_config_GRCh37_v3.1.7
+        actions_url : str
+            URL of this GitHub Actions run to be included in the testing
+            project description
 
         Returns
         -------
@@ -150,12 +165,13 @@ class DXManage():
 
             # Create project and capture returned project ID and store
             project_id = dx.DXProject().new(
-                name = new_project_name,
-                summary = (
+                name=new_project_name,
+                summary=(
                     f"Project for testing changes in {changed_config_name}"
                 ),
                 description=(
                     "This project was created automatically by GitHub Actions"
+                    f": {actions_url}"
                 )
             )
             print(
@@ -209,6 +225,7 @@ class DXManage():
         with open(output_filename, 'w', encoding='utf8') as out_file:
             out_file.write(project_id)
 
+
 def main():
     """
     Run main functions for getting or creating a DX test project
@@ -216,8 +233,9 @@ def main():
     args = parse_args()
     dx_manage = DXManage(args)
     config_name = args.input_config.replace('.json', '')
-    project_id = dx_manage.get_or_create_dx_project(config_name)
+    project_id = dx_manage.get_or_create_dx_project(config_name, args.run_url)
     dx_manage.write_project_id_to_file(project_id, args.output_filename)
+
 
 if __name__ == '__main__':
     main()
