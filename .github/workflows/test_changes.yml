@@ -24,7 +24,7 @@ jobs:
     needs: get_changed_json_files
     if: needs.get_changed_json_files.outputs.any_changed == 'true'
     env:
-      CHANGED_FILES: ${{ needs.get_changed_json_files.outputs.all_changed_files }}
+      CHANGED_FILE: ${{ needs.get_changed_json_files.outputs.all_changed_files }}
     runs-on: ubuntu-latest
     name: Upload and test changed files
 
