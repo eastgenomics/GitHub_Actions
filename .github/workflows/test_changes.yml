@@ -64,7 +64,7 @@ jobs:
         env:
           UPLOADED_FILE_ID: ${{ steps.upload-config.outputs.FILE_ID }}
         run: |
-          python get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID}
+          python get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ vars.CONFIG_PATH }}}
 
       - name: Generate diff report compared to production config
         env:
@@ -74,13 +74,9 @@ jobs:
           PROD_CONFIG_NAME=$(jq -r .prod.name config_diff.json)
           UPDATED_CONFIG_NAME=$(jq -r .updated.name config_diff.json)
 
-          icdiff --unified=3 --line-numbers -t <(dx cat ${PROD_CONFIG_ID}) -L ${PROD_CONFIG_NAME} <(dx cat ${UPLOADED_FILE_ID}) -L ${UPDATED_CONFIG_NAME} | COLUMNS=100 aha > config_diff.html
+          icdiff --unified=3 --line-numbers <(dx cat ${PROD_CONFIG_ID}) -L ${PROD_CONFIG_NAME} <(dx cat ${UPLOADED_FILE_ID}) -L ${UPDATED_CONFIG_NAME} | COLUMNS=100 aha > config_diff.html
           echo "Diff report generated"
       - uses: actions/upload-artifact@v4
         with:
           name: diff-report
           path: config_diff.html
-
-      # - name: Set off testing job
-      #   run: |
-      #     python run_testing_jobs.py -c config_diff.json

@@ -1,10 +1,15 @@
+"""
+Script which finds the highest version of a dias batch config in DNAnexus
+and writes info on this (and the config updated in the PR) to a JSON
+"""
+
 import argparse
 import dxpy as dx
 import json
 import re
 
 from collections import defaultdict
-from packaging.version import Version, parse
+from packaging.version import Version
 
 
 def parse_args() -> argparse.Namespace:
@@ -16,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     args : Namespace
         Namespace of passed command line argument inputs
     """
-    # Command line args set up for running tests
+    # Command line args set up for finding prod config
     parser = argparse.ArgumentParser(
         description='Config files to run tests for'
     )
@@ -44,6 +49,17 @@ def parse_args() -> argparse.Namespace:
         default='config_diff.json',
         type=str,
         help='Name of JSON file with info on updated vs prod config'
+    )
+
+    parser.add_argument(
+        '-p',
+        '--config_path',
+        required=True,
+        type=str,
+        help=(
+            'Path to production config files in DNAnexus - in format '
+            '<project_id>:/path'
+        )
     )
 
     return parser.parse_args()
@@ -77,19 +93,28 @@ class DXManage():
         self.args = args
 
     @staticmethod
-    def read_in_json(config_file, file_id) -> dict:
+    def read_in_json(config_file, file_id):
         """
-        Read in config JSON file to a dict
+        Read in JSON file to a dict
 
         Parameters
         ----------
         config_file : str
-            name of JSON config file to read in
+            name of JSON file to read in
+        file_id : str
+            DNAnexus ID of the uploaded config file
 
         Returns
         -------
         config_dict: dict
             the content of the JSON converted to a dict
+        assay: str
+            name of the assay the updated config relates to, e.g. 'TWE'
+
+        Raises
+        ------
+        AssertionError
+            Raised when there is no assay field in the updated config
         """
         if not config_file.endswith('.json'):
             raise RuntimeError(
@@ -99,27 +124,40 @@ class DXManage():
         with open(config_file, 'r', encoding='utf8') as json_file:
             config_contents = json.load(json_file)
 
+        # Add in keys for the file name and DX file ID to make diffing easier
+        # later
         config_contents['name'] = config_file
         config_contents['dxid'] = file_id
 
-        return config_contents
+        # Get the assay field from the config
+        assay = config_contents.get('assay')
+        assert assay, (
+            f"The updated config {config_file} does not have assay field"
+        )
 
-    def get_json_configs_in_DNAnexus(self, config_path) -> dict:
+        return config_contents, assay
+
+    @staticmethod
+    def get_json_configs_in_DNAnexus(config_path) -> dict:
         """
-        Query path in DNAnexus for json config files for each assay, returning
-        full data for all unarchived config files found
+        Query path in DNAnexus for JSON config files, returning all unarchived
+        config files found
 
-        ASSAY_CONFIG_PATH comes from the app config file sourced to the env.
+        Parameters
+        ----------
+        config_path : str
+            path to prod config files in DNAnexus (<project_id>:/path format)
 
         Returns
         -------
-        all_configs: list
-            list of dicts of the json object for each config file found
+        config_files: list
+            list of dicts, each with info about a JSON config file found in
+            the DX path
 
         Raises
         ------
         AssertionError
-            Raised when invalid project:path structure defined in app config
+            Raised when invalid project:path structure given
         AssertionError
             Raised when no config files found at the given path
         """
@@ -132,7 +170,7 @@ class DXManage():
 
         project, path = config_path.split(':')
 
-        files = list(dx.find_data_objects(
+        config_files = list(dx.find_data_objects(
             name=".json$",
             name_mode='regexp',
             project=project,
@@ -140,31 +178,53 @@ class DXManage():
             describe=True
         ))
 
-        # sense check we find config files
-        assert files, print(
+        # Sense check we find config files
+        assert config_files, print(
             f"No config files found in given path: {project}:{path}"
         )
 
         files_ids = '\n\t'.join([
             f"{x['describe']['name']} ({x['id']} - "
-            f"{x['describe']['archivalState']})" for x in files])
+            f"{x['describe']['archivalState']})" for x in config_files])
         print(f"\nAssay config files found:\n\t{files_ids}")
 
-        return files
+        return config_files
 
     @staticmethod
     def filter_highest_batch_config(config_path, config_files, assay):
         """
-        _summary_
+        Get the highest version of the prod dias batch config for the
+        relevant assay
+
+        Parameters
+        ----------
+        config_path : str
+            path to prod config files in DNAnexus (<project_id>:/path format)
+        config_files : list
+            list of dicts, each with info about a JSON config file found in
+            the DX path
+        assay : str
+            the assay we're looking for the highest version of (e.g. 'TWE)
 
         Returns
         -------
-        _type_
-            _description_
+        highest_config : dict
+            the contents of the prod config with the highest version for that
+            assay
+
+        Raises
+        ------
+        AssertionError
+            Raised when no config file is found for the assay in the path
+        RunTimeError
+            Raised when more than one file found for highest version of
+            the config for the assay
         """
         highest_config = {}
         config_version_files = defaultdict(list)
 
+        # Loop over files, ignoring archived configs and those for
+        # different assay
         for file in config_files:
             if not file['describe']['archivalState'] == 'live':
                 print(
@@ -173,6 +233,7 @@ class DXManage():
                 )
                 continue
 
+                # Read in to dict
             config_data = json.loads(
                 dx.DXFile(
                     project=file['project'],
@@ -188,13 +249,15 @@ class DXManage():
                 (file['describe']['name'], file['id'])
             )
 
-            if Version(config_data.get('version')) > Version(highest_config.get('version', '0')):
+            if Version(config_data.get('version')) > Version(
+                highest_config.get('version', '0')
+            ):
                 config_data['dxid'] = file['id']
                 config_data['name'] = file['describe']['name']
                 highest_config = config_data
 
         assert highest_config, (
-            f"No config file was found for {assay} from {config_path}"
+            f"No config file was found for {assay} in {config_path}"
         )
 
         if len(config_version_files[highest_config['version']]) > 1:
@@ -209,31 +272,29 @@ class DXManage():
             )
 
         print(
-            f"Highest version config found for {assay} was "
-            f"{highest_config.get('version')} from {highest_config.get('dxid')}"
+            f"Highest version config found for {assay} is "
+            f"{highest_config.get('version')} -> {highest_config.get('dxid')}"
         )
-
-        print("Assay config file contents:")
-        prettier_print(highest_config)
 
         return highest_config
 
     @staticmethod
-    def save_config_info(changed_config, prod_config):
+    def save_config_info_to_dict(changed_config, prod_config):
         """
-        _summary_
+        Save info about the updated and prod configs to dict
 
         Parameters
         ----------
-        changed_config : _type_
-            _description_
-        prod_config : _type_
-            _description_
+        changed_config : dict
+            contents of the changed config JSON file as a dict
+        prod_config : dict
+            contents of the highest prod config JSON as a dict
 
         Returns
         -------
-        _type_
-            _description_
+        config_matching_info : dict
+            dict with info on the config which has been updated and the
+            highest prod config
         """
         config_matching_info = {
             'updated': {
@@ -262,7 +323,8 @@ class DXManage():
         Parameters
         ----------
         changed_config_to_prod : dict
-            _description_
+            dict with info on the config which has been updated and the
+            highest prod config
         file_name: str
             name of JSON file to write out
         """
@@ -271,24 +333,23 @@ class DXManage():
 
 
 def main():
+    """
+    Run functions to create JSON with info on updated vs prod config
+    """
     args = parse_args()
     dx_manage = DXManage(args)
 
-    config_path = (
-        "project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/"
-        "dias_batch_configs"
-    )
-    changed_config_contents = dx_manage.read_in_json(
+    changed_config_contents, assay = dx_manage.read_in_json(
         args.input_config,
         args.file_id
     )
-    config_files = dx_manage.get_json_configs_in_DNAnexus(config_path)
+    config_files = dx_manage.get_json_configs_in_DNAnexus(args.config_path)
     prod_config = dx_manage.filter_highest_batch_config(
-        config_path,
+        args.config_path,
         config_files,
-        changed_config_contents.get('assay')
+        assay
     )
-    changed_and_prod_config_info = dx_manage.save_config_info(
+    changed_and_prod_config_info = dx_manage.save_config_info_to_dict(
         changed_config_contents,
         prod_config
     )

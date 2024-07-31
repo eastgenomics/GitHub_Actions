@@ -1,3 +1,7 @@
+"""
+Script which gets or creates a DNAnexus 004 test project for the config
+"""
+
 import argparse
 import dxpy as dx
 import json
@@ -32,7 +36,7 @@ def parse_args() -> argparse.Namespace:
         '--output_filename',
         required=True,
         type=str,
-        help="Name of the file to write the project ID to"
+        help="Name of the file to write the testing project ID to"
     )
 
     return parser.parse_args()
@@ -69,7 +73,7 @@ class DXManage():
     def find_dx_project(changed_config_name):
         """
         Check if a 004 project already exists in DNAnexus which matches
-        what the project would be called for the config file updated
+        what the project should be called for the config file updated
 
         Parameters
         ----------
@@ -80,10 +84,16 @@ class DXManage():
         Returns
         -------
         existing_projects: list
-            list of dicts containing info about existing projects if found,
-            else returns None
-        """
+            list containing info (in dict form) about existing project(s) if
+            found, else returns None
 
+        Raises
+        ------
+        AssertionError
+            Raised when more than one project found for given name
+        """
+        # Find existing project(s) beginning with 004, with a date in %y%m%d
+        # format and includes the name of the updated config file
         existing_projects = list(
             dx.find_projects(
                 name=(
@@ -114,17 +124,31 @@ class DXManage():
         """
         If a testing project for the updated config file exists, get the ID
         of that project. If one does not exist, make a new project for testing
-        """
 
+        Parameters
+        ----------
+        changed_config_name : str
+            name of the config file which has been updated
+            e.g. dias_TWE_config_GRCh37_v3.1.7
+
+        Returns
+        -------
+        project_id: str
+            ID of the testing project to use
+        """
+        # Try and find any existing projects for the updated config
         existing_projects = self.find_dx_project(changed_config_name)
 
+        # If none exist, create new project with today's date and name of
+        # the config file. This includes 'GitHub_Actions' in the name for now
+        # but will be updated when the workflow is in production
         if not existing_projects:
             new_project_name = (
-                f"003_{datetime.now().strftime('%y%m%d')}_GitHub_Actions_"
+                f"004_{datetime.now().strftime('%y%m%d')}_GitHub_Actions_"
                 f"{changed_config_name}_testing"
             )
 
-            # Create new project and capture returned project ID and store
+            # Create project and capture returned project ID and store
             project_id = dx.DXProject().new(
                 name = new_project_name,
                 summary = (
@@ -134,9 +158,9 @@ class DXManage():
                     "This project was created automatically by GitHub Actions"
                 )
             )
-            prettier_print(
-                f'\n004 project for updated config does not exist. Created new '
-                f'project for testing: {new_project_name} ({project_id})'
+            print(
+                "\n004 project for updated config does not exist. Created new "
+                f"project for testing: {new_project_name} ({project_id})"
             )
 
             # Add user permissions to the project
@@ -160,9 +184,10 @@ class DXManage():
                 f"{datetime.fromtimestamp(x['describe']['created']/1000).strftime('%Y-%m-%d')}" for x in existing_projects
             ])
             print(project_info)
+
             project_id = existing_projects[0]['id']
             print(
-                "Updated config will be uploaded to existing project "
+                "Updated config will be uploaded to existing test project: "
                 f"{project_id}"
             )
 
@@ -178,19 +203,21 @@ class DXManage():
         ----------
         project_id : str
             ID of the project to write to file
+        output_filename : str
+            the name of the txt file to write out with the test project ID in
         """
         with open(output_filename, 'w', encoding='utf8') as out_file:
             out_file.write(project_id)
 
 def main():
     """
-    Run main functions for setting off testing jobs
+    Run main functions for getting or creating a DX test project
     """
     args = parse_args()
     dx_manage = DXManage(args)
     config_name = args.input_config.replace('.json', '')
     project_id = dx_manage.get_or_create_dx_project(config_name)
-    dx_manage.write_project_id_to_file(project_id, 'dx_project_id.txt')
+    dx_manage.write_project_id_to_file(project_id, args.output_filename)
 
 if __name__ == '__main__':
     main()
