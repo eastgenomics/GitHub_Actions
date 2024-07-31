@@ -1,5 +1,5 @@
 name: Perform integration testing
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   get_changed_json_files:
@@ -64,7 +64,7 @@ jobs:
         env:
           UPLOADED_FILE_ID: ${{ steps.upload-config.outputs.FILE_ID }}
         run: |
-          python get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ vars.CONFIG_PATH }}}
+          python get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ vars.CONFIG_PATH }}
 
       - name: Generate diff report compared to production config
         env:
