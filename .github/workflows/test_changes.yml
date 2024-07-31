@@ -46,7 +46,7 @@ jobs:
         id: get-create-project
         run: |
           echo "${CHANGED_FILE} was changed in this PR"
-          dx login --token ${{ secrets.DX_TOKEN }}
+          dx login --token ${{ secrets.DX_TOKEN }} --no-projects
           python get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_id.txt
           TEST_PROJ_ID=$(cat dx_project_id.txt)
           echo "TEST_PROJ_ID=$TEST_PROJ_ID" >> $GITHUB_OUTPUT
