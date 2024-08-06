@@ -5,8 +5,6 @@ jobs:
   get_changed_json_files:
     runs-on: ubuntu-latest
     name: Get changed files
-    env:
-      ACTIONS_RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
     outputs:
       all_changed_files: ${{ steps.changed-files.outputs.all_changed_files }}
@@ -22,13 +20,22 @@ jobs:
           files: |
             **.json
 
+      - name: Write issue body
+        id: write-issue-body
+        if: steps.changed-files.outputs.all_changed_files_count == '1'
+        env:
+          ACTIONS_RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: |
+          body="One config file was updated in this PR. Setting off automated testing: ${ACTIONS_RUN_URL}"
+          echo "body=$body" >> $GITHUB_OUTPUT
+
       - name: Create PR comment if one config changed
         if: steps.changed-files.outputs.all_changed_files_count == '1'
         uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            One config file was updated in this PR. Setting off automated testing: ${ACTIONS_RUN_URL}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.write-issue-body.outputs.body }}
           reactions: rocket
 
       - name: Create PR comment if no/multiple configs changed
@@ -36,6 +43,7 @@ jobs:
         uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           body: |
             Either no or multiple config files were updated in this PR. Skipping uploading and automated testing.
           reactions: eyes
