@@ -90,7 +90,7 @@ class DXManage():
         ----------
         changed_config_name : str
             name of the config file which has been updated
-            e.g. dias_TWE_config_GRCh37_v3.1.7
+            e.g. 'dias_TWE_config_GRCh37_v3.1.7'
 
         Returns
         -------
@@ -101,14 +101,14 @@ class DXManage():
         Raises
         ------
         AssertionError
-            Raised when more than one project found for given name
+            Raised when more than one 004 project found for given config name
         """
         # Find existing project(s) beginning with 004, with a date in %y%m%d
         # format and includes the name of the updated config file
         existing_projects = list(
             dx.find_projects(
                 name=(
-                    '^004_[\d]{2}[\d]{2}[\d]{2}_'
+                    '^004_[\d]{2}[\d]{2}[\d]{2}_GitHub_Actions_'
                     f'{changed_config_name}.*$'
                 ),
                 name_mode='regexp',
@@ -125,9 +125,15 @@ class DXManage():
         if not existing_projects:
             return None
 
+        existing_project_info = '\n\t'.join(
+            [f"{proj['id']}: {proj['describe']['name']}"
+            for proj in existing_projects]
+        )
+
         assert len(existing_projects) == 1, (
             "Found multiple existing 004 testing projects for the updated "
-            "config file"
+            f"config file: \n\t{existing_project_info}\n. Please either"
+            " rename or delete projects so a maximum of one remains"
         )
 
         return existing_projects
@@ -191,20 +197,17 @@ class DXManage():
                         f"\nGranted {access_level} privilege to {user}"
                     )
         else:
-            print(
-                "Project for testing the updated config file already exists:"
-            )
+            project_id = existing_projects[0]['id']
             project_info = '\n\t'.join([
                 f"{x['describe']['name']} ({x['id']} - "
                 f"created by {x['describe']['createdBy']['user']} on "
                 f"{datetime.fromtimestamp(x['describe']['created']/1000).strftime('%Y-%m-%d')}" for x in existing_projects
             ])
-            print(project_info)
 
-            project_id = existing_projects[0]['id']
             print(
-                "Updated config will be uploaded to existing test project: "
-                f"{project_id}"
+                "Project for testing the updated config file already "
+                f"exists: \n{project_info}.\nUpdated config will be uploaded"
+                f" to existing test project {project_id}"
             )
 
         return project_id

@@ -279,7 +279,7 @@ class DXManage():
         return highest_config
 
     @staticmethod
-    def save_config_info_to_dict(changed_config, prod_config):
+    def save_config_info_to_dict(assay, changed_config, prod_config):
         """
         Save info about the updated and prod configs to dict
 
@@ -297,6 +297,7 @@ class DXManage():
             highest prod config
         """
         config_matching_info = {
+            'assay': assay,
             'updated': {
                 'name': changed_config.get('name'),
                 'assay': changed_config.get('assay'),
@@ -350,6 +351,7 @@ def main():
         assay
     )
     changed_and_prod_config_info = dx_manage.save_config_info_to_dict(
+        assay,
         changed_config_contents,
         prod_config
     )
