@@ -56,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '-l',
         '--test_sample_limit',
-        type=str,
+        type=int,
         default=5,
         help="The number of samples to set off test jobs for"
     )

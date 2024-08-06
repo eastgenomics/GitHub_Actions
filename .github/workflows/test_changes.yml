@@ -37,7 +37,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            Either no or multiple config files were updated in this PR. Skipping uploading of file and automated testing.
+            Either no or multiple config files were updated in this PR. Skipping uploading and automated testing.
           reactions: eyes
 
   upload_and_test:
