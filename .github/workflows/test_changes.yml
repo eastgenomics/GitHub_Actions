@@ -189,4 +189,4 @@ jobs:
         env:
             JOB_ID: ${{ steps.run-testing-jobs.outputs.JOB_ID }}
         run: |
-          python check_job_status.py -i ${JOB_ID} -o job_command_info.txt
+          python check_jobs_complete.py -i ${JOB_ID} -o job_command_info.txt
