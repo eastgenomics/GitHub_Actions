@@ -103,10 +103,11 @@ jobs:
         env:
           TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
           UPLOADED_FILE_ID: ${{ steps.upload-config.outputs.FILE_ID }}
+          FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
         run: |
           PREFIX="project-"
           PROJ_ID=${TEST_PROJ_ID#"$PREFIX"}
-          DX_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/data/?id.values=${UPLOADED_FILE_ID}"
+          DX_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/data/${FOLDER_NAME}/?id.values=${UPLOADED_FILE_ID}"
           body="Updated configuration file ${CHANGED_FILE} uploaded to DNAnexus 004 test project: $DX_URL"
           echo "body=$body" >> $GITHUB_OUTPUT
 

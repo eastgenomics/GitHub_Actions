@@ -83,6 +83,11 @@ class DXManage():
         # Get inputs
         input_dict = job_details.get('input')
 
+        # Wait on eggd_dias_batch job to finish to get output launched job IDs
+        dx.DXJob(dxid=self.args.job_id).wait_on_done()
+
+        print("All testing jobs set off successfully")
+
         # Get output launched jobs
         job_output_ids = job_details.get('output').get('launched_jobs')
         launched_jobs_list = job_output_ids.split(',')
