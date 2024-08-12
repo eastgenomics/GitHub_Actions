@@ -262,16 +262,16 @@ class DXManage():
         # Get name(s) of folders which have the GitHub Actions run ID in the
         # name -> this should only be one. If no folders in project, this will
         # be an empty list
-        folder_name = [
+        folder_names = [
             folder for folder in folders_list.get('folders') if self.args.run_id in folder
         ]
 
-        assert len(folder_name) == 1, (
+        assert len(folder_names) == 1, (
             "Error: No or multiple folder(s) found for this GitHub Actions run"
             f" in the test project {self.args.test_project_id}"
         )
 
-        return folder_name
+        return folder_names[0]
 
     def set_off_test_jobs(self, updated_config_id, folder_name) -> str:
         """
