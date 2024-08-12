@@ -234,6 +234,32 @@ class DXManage():
 
         return executable_str
 
+    def get_multiqc_report(self, project_id):
+        """
+        Find the file ID of the MultiQC report to use as an input for the
+        eggd_dias_batch testing job, otherwise this will fail because no
+        MultiQC job is run in the 004 testing project
+
+        Returns
+        -------
+        multiqc_report_id : str
+            DX file ID of the MultiQC report
+        """
+        multiqc_reports = list(dx.find_data_objects(
+            project=project_id,
+            name='*multiqc*html',
+            name_mode='glob'
+        ))
+
+        assert len(multiqc_reports) == 1, (
+            "Error: Multiple MultiQC reports found in project"
+        )
+
+        multiqc_report_id = multiqc_reports[0]['id']
+
+        return multiqc_report_id
+
+
     def get_actions_folder(self):
         """
         Get the folder that was created in the test project to put the
@@ -273,7 +299,9 @@ class DXManage():
 
         return folder_names[0]
 
-    def set_off_test_jobs(self, updated_config_id, folder_name) -> str:
+    def set_off_test_jobs(
+        self, updated_config_id, folder_name, multiqc_report
+    ) -> str:
         """
         Set off the job in the test project using inputs from
         the original job but with the updated config file instead
@@ -307,6 +335,8 @@ class DXManage():
         job_inputs['assay_config_file'] = {
             '$dnanexus_link': updated_config_id
         }
+        job_inputs['multiqc_report'] = multiqc_report
+
         # Only set off jobs for a subset of samples - this is set by a
         # repository GA variable
         job_inputs['sample_limit'] = self.args.test_sample_limit
@@ -351,11 +381,13 @@ def main():
     config_info = dx_manage.read_in_json(args.config_info)
     updated_config_id = config_info.get('updated').get('dxid')
     project_id = dx_manage.get_project_id_from_batch_job()
+    multiqc_report = dx_manage.get_multiqc_report(project_id)
     dx_manage.check_dias_single_version_which_generated_data(project_id)
     folder_name = dx_manage.get_actions_folder()
     job_id = dx_manage.set_off_test_jobs(
         updated_config_id,
-        folder_name
+        folder_name,
+        multiqc_report
     )
     dx_manage.write_out_job_id(job_id, args.out_file)
 

@@ -65,6 +65,43 @@ class DXManage():
     def __init__(self, args) -> None:
         self.args = args
 
+    def get_project_from_job_id(self):
+        """
+        Get the test project ID based on the test job which has been set off
+
+        Returns
+        -------
+        project_id : str
+            DX project ID
+        """
+        job_details = dx.describe(self.args.job_id)
+        project_id = job_details.get('project')
+
+        return project_id
+
+    def find_jobs_in_project(self):
+
+
+    def find_executions_in_project(self):
+        """
+        _summary_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
+        executions = list(dx.find_executions(
+            project='project-Gpb3k6Q4PZYxVz9pzXvK82Xy',
+            describe={
+                'fields': {
+                    'state': True
+                }
+            }
+        ))
+
+        return executions
+
     def get_job_output_details(self):
         """
         Get describe details for all output files from a job
