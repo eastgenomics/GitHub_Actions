@@ -76,17 +76,15 @@ class DXManage():
         input_dict : dict
             dictionary of inputs to the test job
         """
-        print(f"Querying details for launched job {self.args.job_id}")
-        # Describe the job itself
-        job_details = dx.DXJob(dxid=self.args.job_id).describe()
-
-        # Get inputs
-        input_dict = job_details.get('input')
-
-        # Wait on eggd_dias_batch job to finish to get output launched job IDs
+        # Wait on eggd_dias_batch job to finish to get info
         dx.DXJob(dxid=self.args.job_id).wait_on_done()
 
         print("All testing jobs set off successfully")
+
+        print(f"Querying details for eggd_dias_batch job {self.args.job_id}")
+        # Describe the job to get the input and output launched jobs
+        job_details = dx.DXJob(dxid=self.args.job_id).describe()
+        input_dict = job_details.get('input')
 
         # Get output launched jobs
         job_output_ids = job_details.get('output').get('launched_jobs')
