@@ -233,7 +233,7 @@ class DXManage():
                 )
                 continue
 
-                # Read in to dict
+            # Read in to dict
             config_data = json.loads(
                 dx.DXFile(
                     project=file['project'],

@@ -1,6 +1,10 @@
 name: Perform integration testing
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   get_changed_json_files:
     runs-on: ubuntu-latest
@@ -20,13 +24,14 @@ jobs:
           files: |
             **.json
 
-      - name: Write issue body
-        id: write-issue-body
+      - name: Write comment body
+        id: write-comment-body
         if: steps.changed-files.outputs.all_changed_files_count == '1'
         env:
           ACTIONS_RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          CHANGED_FILE: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          body="One config file was updated in this PR. Setting off automated testing: ${ACTIONS_RUN_URL}"
+          body="One config file (${CHANGED_FILE}) was updated in this PR. Setting off automated testing: ${ACTIONS_RUN_URL}"
           echo "body=$body" >> $GITHUB_OUTPUT
 
       - name: Create PR comment if one config changed
@@ -35,7 +40,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          body: ${{ steps.write-issue-body.outputs.body }}
+          body: ${{ steps.write-comment-body.outputs.body }}
           reactions: rocket
 
       - name: Create PR comment if no/multiple configs changed
@@ -77,18 +82,41 @@ jobs:
         run: |
           echo "${CHANGED_FILE} was changed in this PR"
           dx login --token ${{ secrets.DX_TOKEN }} --noprojects
-          python get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_id.txt -u ${ACTIONS_RUN_URL}
-          TEST_PROJ_ID=$(cat dx_project_id.txt)
+          python get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_info.json -u ${ACTIONS_RUN_URL} -r ${{ github.run_id }}
+          TEST_PROJ_ID=$(jq -r .project_id dx_project_info.json)
+          FOLDER_NAME=$(jq -r .folder_name dx_project_info.json)
           echo "TEST_PROJ_ID=$TEST_PROJ_ID" >> $GITHUB_OUTPUT
+          echo "FOLDER_NAME=$FOLDER_NAME" >> $GITHUB_OUTPUT
 
       - name: Upload changed JSON config file to testing_project
         env:
           TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+          FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
         id: upload-config
         run: |
-          FILE_ID=$(dx upload ${CHANGED_FILE} --destination ${TEST_PROJ_ID}:/ --brief)
-          echo "Config file uploaded to DNAnexus. File ID: $FILE_ID"
+          FILE_ID=$(dx upload ${CHANGED_FILE} --destination ${TEST_PROJ_ID}:${FOLDER_NAME} --brief)
+          echo "Config file uploaded to DNAnexus project ${TEST_PROJ_ID}. File ID: $FILE_ID"
           echo "FILE_ID=$FILE_ID" >> $GITHUB_OUTPUT
+
+      - name: Generate comment body for file upload
+        id: generate-upload-comment
+        env:
+          TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+          UPLOADED_FILE_ID: ${{ steps.upload-config.outputs.FILE_ID }}
+        run: |
+          PREFIX="project-"
+          PROJ_ID=${TEST_PROJ_ID#"$PREFIX"}
+          DX_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/data/?id.values=${UPLOADED_FILE_ID}"
+          body="Updated configuration file ${CHANGED_FILE} uploaded to DNAnexus 004 test project: $DX_URL"
+          echo "body=$body" >> $GITHUB_OUTPUT
+
+      - name: Create PR comment with link to uploaded file
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.generate-upload-comment.outputs.body }}
+          reactions: hooray
 
       - name: Get production config in DNAnexus and output JSON with config info
         env:
@@ -122,13 +150,43 @@ jobs:
           repo: eggd_dias_single_workflow
 
       - name: Run tests in DNAnexus
+        id: run-testing-jobs
         env:
           TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
           RELEASE_VERSION: ${{ steps.get-release.outputs.release }}
           ASSAY: ${{ steps.generate-diff.outputs.ASSAY }}
         run: |
           echo "Current release version of eggd_dias_single_workflow GitHub repository is ${RELEASE_VERSION}"
-          TEST_JOB_ID=$(echo ${{ vars.TEST_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
+          PROD_JOB_ID=$(echo ${{ vars.PROD_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
           echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${TEST_JOB_ID}"
 
-          python run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -j ${TEST_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -r ${{ github.run_id }}
+          python run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -r ${{ github.run_id }} -o job_id.txt
+
+          JOB_ID=$(cat job_id.txt)
+          echo "JOB_ID=$JOB_ID" >> $GITHUB_OUTPUT
+
+      - name: Create comment body for job in DNAnexus
+        id: create-job-comment-body
+        env:
+          JOB_ID: ${{ steps.run-testing-jobs.outputs.JOB_ID }}
+        run: |
+          PREFIX="project-"
+          PROJ_ID=${TEST_PROJ_ID#"$PREFIX"}
+          JOB_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/monitor/job/${JOB_ID}"
+          body="Test job(s) set off in DNAnexus: $JOB_URL"
+          echo "body=$body" >> $GITHUB_OUTPUT
+
+      - name: Create PR comment with link to test job
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.create-job-comment-body.outputs.body }}
+          reactions: heart
+
+      - name: Check jobs complete successfully
+        id: check-job-status
+        env:
+            JOB_ID: ${{ steps.run-testing-jobs.outputs.JOB_ID }}
+        run: |
+          python check_job_status.py -i ${JOB_ID} -o job_command_info.txt

@@ -50,6 +50,14 @@ def parse_args() -> argparse.Namespace:
         )
     )
 
+    parser.add_argument(
+        '-r',
+        '--run_id',
+        required=True,
+        type=str,
+        help="ID of this GitHub Actions run to name the output DX folder"
+    )
+
     return parser.parse_args()
 
 
@@ -212,21 +220,76 @@ class DXManage():
 
         return project_id
 
-    @staticmethod
-    def write_project_id_to_file(project_id, output_filename):
+    def create_dx_folder(self, project_id):
         """
-        Write the project ID to a file for use in the next steps of the
-        workflow
+        Creates a DNAnexus folder for the GitHub Actions run if it does not
+        exist
+
+        Returns
+        -------
+        folder_name : str
+            The name of the folder that has been created in the DX test
+            project
+
+        Raises
+        ------
+        RuntimeError
+            When a folder for the GitHub Actions run already exists
+        """
+        # Create a folder to put the job output in
+        folder_name = f"/GitHub_Actions_run-{self.args.run_id}"
+
+        try:
+            dx.api.project_list_folder(
+                object_id=project_id,
+                input_params={
+                    'folder': folder_name,
+                    'only': 'folders'
+                },
+                always_retry=True
+            )
+
+            raise RuntimeError(
+                "Error: folder for this GitHub Actions run already exists. "
+                "Exiting because this is not expected to happen"
+            )
+
+        except dx.exceptions.ResourceNotFound:
+            # can't find folder -> create one
+            dx.api.project_new_folder(
+                object_id=project_id,
+                input_params={
+                    'folder': folder_name,
+                    'parents': True
+                }
+            )
+
+            prettier_print(f'Created output folder: {folder_name}')
+
+        return folder_name
+
+    @staticmethod
+    def write_project_id_to_file(project_id, folder_name, output_filename):
+        """
+        Write the project ID and folder name to a file for use in the next
+        steps of the workflow
 
         Parameters
         ----------
-        project_id : str
-            ID of the project to write to file
+        project_id: str
+            ID of the DX testing project which has been found/created
+        folder_name: str
+            name of the folder which has been created in the testing project
         output_filename : str
             the name of the txt file to write out with the test project ID in
         """
+        project_dict = {
+            'project_id': project_id,
+            'folder_name': folder_name
+
+        }
         with open(output_filename, 'w', encoding='utf8') as out_file:
-            out_file.write(project_id)
+            json.dump(project_dict, out_file)
 
 
 def main():
@@ -237,7 +300,12 @@ def main():
     dx_manage = DXManage(args)
     config_name = args.input_config.replace('.json', '')
     project_id = dx_manage.get_or_create_dx_project(config_name, args.run_url)
-    dx_manage.write_project_id_to_file(project_id, args.output_filename)
+    folder_name = dx_manage.create_dx_folder(project_id)
+    dx_manage.write_project_id_to_file(
+        project_id,
+        folder_name,
+        args.output_filename
+    )
 
 
 if __name__ == '__main__':
