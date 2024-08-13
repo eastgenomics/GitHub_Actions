@@ -158,10 +158,6 @@ def main():
     args = parse_args()
     dx_manage = DXManage(args)
     original_proj = dx_manage.get_project_from_job_id()
-    executions = dx_manage.find_all_executions_in_project(original_proj)
-    non_terminal_executions = dx_manage.find_non_terminal_jobs(executions)
-    if non_terminal_executions:
-        dx_manage.terminate(non_terminal_executions)
     job_inputs, launched_jobs = dx_manage.get_job_output_details()
     dx_manage.write_out_original_job_command(
         job_inputs,
