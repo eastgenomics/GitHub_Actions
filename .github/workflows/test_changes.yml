@@ -192,3 +192,7 @@ jobs:
             JOB_ID: ${{ steps.run-testing-jobs.outputs.JOB_ID }}
         run: |
           python check_jobs_complete.py -i ${JOB_ID} -o job_command_info.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: job-info
+          path: job_command_info.txt

@@ -45,20 +45,6 @@ class DXManage():
     def __init__(self, args) -> None:
         self.args = args
 
-    def get_project_from_job_id(self):
-        """
-        Get the test project ID based on the test job which has been set off
-
-        Returns
-        -------
-        project_id : str
-            DX project ID
-        """
-        job_details = dx.describe(self.args.job_id)
-        project_id = job_details.get('project')
-
-        return project_id
-
     def get_job_output_details(self):
         """
         Get describe details for all output files from a job
