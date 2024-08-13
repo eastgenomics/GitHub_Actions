@@ -157,7 +157,6 @@ def main():
     """
     args = parse_args()
     dx_manage = DXManage(args)
-    original_proj = dx_manage.get_project_from_job_id()
     job_inputs, launched_jobs = dx_manage.get_job_output_details()
     dx_manage.write_out_original_job_command(
         job_inputs,
