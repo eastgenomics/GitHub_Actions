@@ -3,7 +3,6 @@ Script to check the testing analyses/jobs complete successfully
 """
 
 import argparse
-import concurrent.futures
 import dxpy as dx
 
 
@@ -59,87 +58,6 @@ class DXManage():
         project_id = job_details.get('project')
 
         return project_id
-
-    @staticmethod
-    def find_all_executions_in_project(project_id):
-        """
-        Find all executions (jobs/analyses) in a project
-
-        Parameters
-        ----------
-        project_id : str
-            DX project ID
-
-        Returns
-        -------
-        executions : list
-            list of dicts, each containing information about a job/analysis
-        """
-        executions = list(dx.find_executions(
-            project=project_id,
-            describe={
-                'fields': {
-                    'state': True
-                }
-            }
-        ))
-
-        return executions
-
-    @staticmethod
-    def find_non_terminal_jobs(executions):
-        """
-        Find any non-complete/failed/terminated jobs to be terminated
-
-        Parameters
-        ----------
-        executions : list
-            list, where if jobs, is a list of dicts with each containing
-            information about a job/analysis
-
-        Returns
-        -------
-        non_terminal_job_ids: list
-            list of IDs of jobs/analyses to terminate
-        """
-        end_states = ['done', 'terminated', 'failed']
-
-        if executions:
-            non_terminal_job_ids = [
-                job['id'] for job in executions
-                if job['describe']['state'] not in end_states
-            ]
-        else:
-            non_terminal_job_ids = []
-
-        return non_terminal_job_ids
-
-    @staticmethod
-    def terminate(jobs):
-        def terminate_one(job) -> None:
-            """dx call to terminate single job"""
-            if job.startswith('job'):
-                dx.DXJob(dxid=job).terminate()
-            else:
-                dx.DXAnalysis(dxid=job).terminate()
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-            concurrent_jobs = {
-                executor.submit(terminate_one, id):
-                id for id in sorted(jobs, reverse=True)
-            }
-            for future in concurrent.futures.as_completed(concurrent_jobs):
-                # access returned output as each is returned in any order
-                try:
-                    future.result()
-                except Exception as exc:
-                    # catch any errors that might get raised
-                    print(
-                        "Error terminating job "
-                        f"{concurrent_jobs[future]}: {exc}"
-                    )
-
-        print("Terminated all current jobs.")
 
     def get_job_output_details(self):
         """

@@ -3,6 +3,7 @@ Script which sets of testing jobs in a DNAnexus project
 """
 
 import argparse
+import concurrent.futures
 import dxpy as dx
 import json
 
@@ -168,6 +169,89 @@ class DXManage():
         )
 
         return project_id
+
+    def find_all_executions_in_project(self):
+        """
+        Find all executions (jobs/analyses) in the test 004 project
+
+        Returns
+        -------
+        executions : list
+            list of dicts, each containing information about a job/analysis
+        """
+        executions = list(dx.find_executions(
+            project=self.args.test_project_id,
+            describe={
+                'fields': {
+                    'state': True
+                }
+            }
+        ))
+
+        return executions
+
+    @staticmethod
+    def find_non_terminal_jobs(executions):
+        """
+        Find any non-complete/failed/terminated jobs to be terminated
+
+        Parameters
+        ----------
+        executions : list
+            list, where if jobs, is a list of dicts with each containing
+            information about a job/analysis
+
+        Returns
+        -------
+        non_terminal_job_ids: list
+            list of IDs of jobs/analyses to terminate
+        """
+        end_states = ['done', 'terminated', 'failed']
+
+        if executions:
+            non_terminal_job_ids = [
+                job['id'] for job in executions
+                if job['describe']['state'] not in end_states
+            ]
+        else:
+            non_terminal_job_ids = []
+
+        return non_terminal_job_ids
+
+    @staticmethod
+    def terminate(jobs):
+        """
+        Terminate all jobs based on the list of job/analysis IDs given
+
+        Parameters
+        ----------
+        jobs : list
+            list of job / analysis IDs
+        """
+        def terminate_one(job) -> None:
+            """dx call to terminate single job"""
+            if job.startswith('job'):
+                dx.DXJob(dxid=job).terminate()
+            else:
+                dx.DXAnalysis(dxid=job).terminate()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+            concurrent_jobs = {
+                executor.submit(terminate_one, id):
+                id for id in sorted(jobs, reverse=True)
+            }
+            for future in concurrent.futures.as_completed(concurrent_jobs):
+                # access returned output as each is returned in any order
+                try:
+                    future.result()
+                except Exception as exc:
+                    # catch any errors that might get raised
+                    print(
+                        "Error terminating job "
+                        f"{concurrent_jobs[future]}: {exc}"
+                    )
+
+        print("Terminated all current jobs.")
 
     def check_dias_single_version_which_generated_data(self, project_id):
         """
@@ -352,7 +436,7 @@ class DXManage():
         }
 
         # Only set off jobs for a subset of samples - this is set by a
-        # repository GA variable
+        # repository GitHub Actions variable
         job_inputs['sample_limit'] = self.args.test_sample_limit
 
         # Set off job in the test project with our newly created output folder
@@ -395,6 +479,10 @@ def main():
     config_info = dx_manage.read_in_json(args.config_info)
     updated_config_id = config_info.get('updated').get('dxid')
     project_id = dx_manage.get_project_id_from_batch_job()
+    executions = dx_manage.find_all_executions_in_project()
+    non_terminal_executions = dx_manage.find_non_terminal_jobs(executions)
+    if non_terminal_executions:
+        dx_manage.terminate(non_terminal_executions)
     multiqc_report = dx_manage.get_multiqc_report(project_id)
     dx_manage.check_dias_single_version_which_generated_data(project_id)
     folder_name = dx_manage.get_actions_folder()
