@@ -240,10 +240,21 @@ class DXManage():
         eggd_dias_batch testing job, otherwise this will fail because no
         MultiQC job is run in the 004 testing project
 
+        Parameters
+        ----------
+        project_id : str
+            DX project ID
+
         Returns
         -------
         multiqc_report_id : str
             DX file ID of the MultiQC report
+
+        Raises
+        ------
+        AssertionError
+            When no or multiple MultiQC reports are found in the original 002
+            project
         """
         multiqc_reports = list(dx.find_data_objects(
             project=project_id,

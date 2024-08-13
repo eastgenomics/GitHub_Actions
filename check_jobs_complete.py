@@ -3,8 +3,9 @@ Script to check the testing analyses/jobs complete successfully
 """
 
 import argparse
+import concurrent.futures
 import dxpy as dx
-import json
+
 
 def parse_args() -> argparse.Namespace:
     """
@@ -38,26 +39,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def prettier_print(thing) -> None:
-    """
-    Pretty print for nicer viewing in the logs since pprint does not
-    do an amazing job visualising big dicts and long strings
-
-    Bonus: we're indenting using the Braille Pattern Blank U+2800
-    unicode character since the new DNAnexus UI (as of Dec. 2023)
-    strips leading tabs and spaces in the logs, which makes viewing
-    the pretty dicts terrible. Luckily they don't strip other
-    whitespace characters, so we can get around them yet again making
-    their UI worse.
-
-    Parameters
-    ----------
-    thing : anything json dumpable
-        thing to print
-    """
-    print(json.dumps(thing, indent='⠀⠀'))
-
-
 class DXManage():
     """
     Methods for generic handling of dx related things
@@ -79,20 +60,23 @@ class DXManage():
 
         return project_id
 
-    def find_jobs_in_project(self):
-
-
-    def find_executions_in_project(self):
+    @staticmethod
+    def find_all_executions_in_project(project_id):
         """
-        _summary_
+        Find all executions (jobs/analyses) in a project
+
+        Parameters
+        ----------
+        project_id : str
+            DX project ID
 
         Returns
         -------
-        _type_
-            _description_
+        executions : list
+            list of dicts, each containing information about a job/analysis
         """
         executions = list(dx.find_executions(
-            project='project-Gpb3k6Q4PZYxVz9pzXvK82Xy',
+            project=project_id,
             describe={
                 'fields': {
                     'state': True
@@ -101,6 +85,61 @@ class DXManage():
         ))
 
         return executions
+
+    @staticmethod
+    def find_non_terminal_jobs(executions):
+        """
+        Find any non-complete/failed/terminated jobs to be terminated
+
+        Parameters
+        ----------
+        executions : list
+            list, where if jobs, is a list of dicts with each containing
+            information about a job/analysis
+
+        Returns
+        -------
+        non_terminal_job_ids: list
+            list of IDs of jobs/analyses to terminate
+        """
+        end_states = ['done', 'terminated', 'failed']
+
+        if executions:
+            non_terminal_job_ids = [
+                job['id'] for job in executions
+                if job['describe']['state'] not in end_states
+            ]
+        else:
+            non_terminal_job_ids = []
+
+        return non_terminal_job_ids
+
+    @staticmethod
+    def terminate(jobs):
+        def terminate_one(job) -> None:
+            """dx call to terminate single job"""
+            if job.startswith('job'):
+                dx.DXJob(dxid=job).terminate()
+            else:
+                dx.DXAnalysis(dxid=job).terminate()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+            concurrent_jobs = {
+                executor.submit(terminate_one, id):
+                id for id in sorted(jobs, reverse=True)
+            }
+            for future in concurrent.futures.as_completed(concurrent_jobs):
+                # access returned output as each is returned in any order
+                try:
+                    future.result()
+                except Exception as exc:
+                    # catch any errors that might get raised
+                    print(
+                        "Error terminating job "
+                        f"{concurrent_jobs[future]}: {exc}"
+                    )
+
+        print("Terminated all current jobs.")
 
     def get_job_output_details(self):
         """
@@ -163,7 +202,7 @@ class DXManage():
             list of jobs/analyses launched by GitHub Actions
         """
 
-        prettier_print(
+        print(
             f'Holding check until {len(all_job_ids)} job(s)/analyses complete'
         )
 
@@ -200,6 +239,11 @@ def main():
     """
     args = parse_args()
     dx_manage = DXManage(args)
+    original_proj = dx_manage.get_project_from_job_id()
+    executions = dx_manage.find_all_executions_in_project(original_proj)
+    non_terminal_executions = dx_manage.find_non_terminal_jobs(executions)
+    if non_terminal_executions:
+        dx_manage.terminate(non_terminal_executions)
     job_inputs, launched_jobs = dx_manage.get_job_output_details()
     dx_manage.write_out_original_job_command(
         job_inputs,
