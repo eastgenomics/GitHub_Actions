@@ -9,7 +9,7 @@ import dxpy as dx
 
 def parse_args() -> argparse.Namespace:
     """
-    Parse command line arguments
+    Parse command line arguments to check jobs complete
 
     Returns
     -------

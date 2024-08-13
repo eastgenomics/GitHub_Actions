@@ -230,6 +230,7 @@ class DXManage():
                 "release version for the Dias single GitHub repo "
                 f"({self.args.repo_version}). \nPlease check that this is "
                 "expected and if not, update the job ID given for this assay"
+                " within the repository's GitHub Actions variables"
             )
 
         return executable_str
@@ -263,7 +264,7 @@ class DXManage():
         ))
 
         assert len(multiqc_reports) == 1, (
-            "Error: Multiple MultiQC reports found in project"
+            "Error: No or multiple MultiQC report(s) found in project"
         )
 
         multiqc_report_id = multiqc_reports[0]['id']
@@ -346,7 +347,9 @@ class DXManage():
         job_inputs['assay_config_file'] = {
             '$dnanexus_link': updated_config_id
         }
-        job_inputs['multiqc_report'] = multiqc_report
+        job_inputs['multiqc_report'] = {
+            '$dnanexus_link': multiqc_report
+        }
 
         # Only set off jobs for a subset of samples - this is set by a
         # repository GA variable
