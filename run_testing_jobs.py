@@ -501,12 +501,16 @@ def main():
     if non_terminal_executions:
         dx_manage.terminate(non_terminal_executions)
 
-    # Find MultiQC report from original 002 project and if not already
-    # copied, copy to our 004 project as otherwise eggd_artemis will fail
+    # Find MultiQC report in 004 project to use as input for test job
+    # since otherwise eggd_artemis automatically finds the MultiQC report via
+    # a job in the 004 project (and this does not exist)
     multiqc_report = dx_manage.find_multiqc_report_in_proj(project_id)
 
     # Check dias_single version used in 002 project and set off test jobs
     dx_manage.check_dias_single_version_which_generated_data(project_id)
+
+    # Set off test job with the updated config based on the prod job given
+    # for the relevant assay
     folder_name = dx_manage.get_actions_folder()
     job_id = dx_manage.set_off_test_jobs(
         updated_config_id,

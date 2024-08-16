@@ -150,16 +150,28 @@ jobs:
           owner: eastgenomics
           repo: eggd_dias_single_workflow
 
+      - name: Copy test data to test project
+        id: copy-data-over
+        env:
+          ASSAY: ${{ steps.generate-diff.outputs.ASSAY }}
+          TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+        run: |
+          PROD_JOB_ID=$(echo ${{ vars.PROD_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
+          echo "Copying test data from 002 project which was used for ${ASSAY} job set (${TEST_PROJ_ID}) over to 004 testing project ${TEST_PROJ_ID}"
+
+          python copy_data_over.py -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -r ${{ github.run_id }}
+          echo "PROD_JOB_ID=$PROD_JOB_ID" >> $GITHUB_OUTPUT
+
       - name: Run tests in DNAnexus
         id: run-testing-jobs
         env:
           TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+          PROD_JOB_ID: ${{ steps.copy-data-over.outputs.PROD_JOB_ID }}
           RELEASE_VERSION: ${{ steps.get-release.outputs.release }}
           ASSAY: ${{ steps.generate-diff.outputs.ASSAY }}
         run: |
           echo "Current release version of eggd_dias_single_workflow GitHub repository is ${RELEASE_VERSION}"
-          PROD_JOB_ID=$(echo ${{ vars.PROD_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
-          echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${TEST_JOB_ID}"
+          echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${PROD_JOB_ID}"
 
           python run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -r ${{ github.run_id }} -o job_id.txt
 
