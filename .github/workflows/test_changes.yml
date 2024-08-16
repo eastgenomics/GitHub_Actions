@@ -159,7 +159,7 @@ jobs:
           PROD_JOB_ID=$(echo ${{ vars.PROD_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
           echo "Copying test data from 002 project which was used for ${ASSAY} job set (${TEST_PROJ_ID}) over to 004 testing project ${TEST_PROJ_ID}"
 
-          python copy_data_over.py -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -r ${{ github.run_id }}
+          python copy_test_data.py -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -r ${{ github.run_id }}
           echo "PROD_JOB_ID=$PROD_JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Run tests in DNAnexus
