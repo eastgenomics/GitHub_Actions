@@ -375,3 +375,6 @@ def main():
             f"{source_project_id}"
         )
         dx_manage.copy_file_to_test_project_folder(qc_status, ga_folder)
+
+if __name__ == '__main__':
+    main()
