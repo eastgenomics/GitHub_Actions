@@ -77,7 +77,7 @@ def parse_args() -> argparse.Namespace:
         '--out_file',
         required=True,
         type=str,
-        help="Name of the file to write the URL of the test job to"
+        help="Name of the file to write the launched job ID to"
     )
 
     return parser.parse_args()
@@ -222,7 +222,7 @@ class DXManage():
     @staticmethod
     def terminate(jobs):
         """
-        Terminate all jobs based on the list of job/analysis IDs given
+        Terminate all jobs based on a list of job/analysis IDs given
 
         Parameters
         ----------
@@ -321,7 +321,7 @@ class DXManage():
 
         return executable_str
 
-    def get_multiqc_report_from_002_proj(self, project_id):
+    def find_multiqc_report_in_proj(self, project_id):
         """
         Find the file ID of the MultiQC report to use as an input for the
         eggd_dias_batch test job we set off, otherwise the eggd_artemis job
@@ -353,6 +353,7 @@ class DXManage():
 
         assert len(multiqc_reports) == 1, (
             "Error: No or multiple MultiQC report(s) found in project"
+            f" {project_id}"
         )
 
         # Format as project-id:file-id
@@ -361,76 +362,6 @@ class DXManage():
         )
 
         return multiqc_report_id
-
-    def check_multiqc_report_in_project(self, multiqc_report_id):
-        """
-        Look for existing MultiQC report with that name in our folder to check
-        if the report has already been copied over
-
-        Parameters
-        ----------
-        multiqc_report_id : str
-            DX file ID of the MultiQC report in format project-id:file-id
-
-        Returns
-        -------
-        copy: boolean
-            Whether to copy the MultiQC report from the 002 project into
-            the 004 project
-
-        """
-        # Set copy to True as default
-        copy = True
-        # Create object of original MultiQC report in 002 project
-        _, multi_file_id = multiqc_report_id.split(':')
-
-        # Search for report in our 004 test project to see if it has already
-        # been copied over
-        reports_found = list(dx.find_data_objects(
-            project=self.args.test_project_id,
-            name="*multiqc*html",
-            name_mode="glob"
-        ))
-
-        if reports_found:
-            # Check if we already have the 002 MultiQC file in our project
-            # If we do, set copy to False as we do not need to copy again
-            file_ids = [file['id'] for file in reports_found]
-            if multi_file_id in file_ids:
-                copy = False
-                print(
-                    "MultiQC report from 002 project already copied to 004 "
-                    "test project, skipping copy"
-                )
-            else:
-                print(
-                    "MultiQC report from 002 project not found in 004 test "
-                    "project, this will be copied over"
-                )
-        else:
-            print(
-                "MultiQC report from 002 project not found in 004 test "
-                "project, this will be copied over"
-            )
-
-        return copy
-
-    def copy_multiqc_report_to_project(self, multiqc_report_id) -> None:
-        """
-        Copy the MultiQC report from the original project to the test project
-
-        Parameters
-        ----------
-        multiqc_report_id : str
-            DX file ID of the MultiQC report in format project-id:file-id
-        """
-        # Create DXFile object for MultiQC report in original project
-        source_project, file_id = multiqc_report_id.split(':')
-        multiqc_report_obj = dx.DXFile(file_id, project=source_project)
-
-        # Copy MultiQC report over to the root of our 004 test project
-        # (otherwise eggd_artemis will fail)
-        multiqc_report_obj.clone(self.args.test_project_id)
 
     def get_actions_folder(self):
         """
@@ -496,18 +427,18 @@ class DXManage():
         # Describe the original job to get the inputs
         job_details = dx.describe(self.args.assay_job_id)
         job_inputs = job_details.get('input')
-        original_proj = job_details.get('project')
         app_name = job_details.get('executableName')
 
         # Get the project the original job was run in so that we can
         # provide the full project:/folder path and re-run the original
         # job in our test project
         original_single_path = job_inputs.get('single_output_dir')
-        path_to_single_with_project = f"{original_proj}:{original_single_path}"
 
         # Replace some inputs to test our config file
         _, multi_id = multiqc_report.split(':')
-        job_inputs['single_output_dir'] = path_to_single_with_project
+        job_inputs['single_output_dir'] = (
+            f'{folder_name}{original_single_path}'
+        )
         job_inputs['assay_config_file'] = {
             '$dnanexus_link': updated_config_id
         }
@@ -518,6 +449,9 @@ class DXManage():
         # Only set off jobs for a subset of samples - this is set by a
         # repository GitHub Actions variable
         job_inputs['sample_limit'] = self.args.test_sample_limit
+
+        print("Setting off job in test project with updated config file:\n")
+        prettier_print(job_inputs)
 
         # Set off job in the test project with our newly created output folder
         job = dx.DXApp(name=app_name).run(
@@ -569,12 +503,9 @@ def main():
 
     # Find MultiQC report from original 002 project and if not already
     # copied, copy to our 004 project as otherwise eggd_artemis will fail
-    multiqc_report = dx_manage.get_multiqc_report_from_002_proj(project_id)
-    copy = dx_manage.check_multiqc_report_in_project(multiqc_report)
-    if copy:
-        dx_manage.copy_multiqc_report_to_project(multiqc_report)
+    multiqc_report = dx_manage.find_multiqc_report_in_proj(project_id)
 
-    # Check dias_single v used in 002 project and set off test jobs
+    # Check dias_single version used in 002 project and set off test jobs
     dx_manage.check_dias_single_version_which_generated_data(project_id)
     folder_name = dx_manage.get_actions_folder()
     job_id = dx_manage.set_off_test_jobs(
