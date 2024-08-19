@@ -51,7 +51,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
             Either no or multiple config files were updated in this PR. Skipping uploading and automated testing.
-          reactions: eyes
 
   upload_and_test:
     needs: get_changed_json_files
@@ -196,7 +195,6 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           token: ${{ secrets.GITHUB_TOKEN }}
           body: ${{ steps.create-job-comment-body.outputs.body }}
-          reactions: heart
 
       - name: Check jobs complete successfully
         id: check-job-status

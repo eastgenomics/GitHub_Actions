@@ -1,5 +1,5 @@
 """
-Script which sets of testing jobs in a DNAnexus project
+Script which sets off testing jobs in a DNAnexus project
 """
 
 import argparse
@@ -214,6 +214,9 @@ class DXManage():
                 job['id'] for job in executions
                 if job['describe']['state'] not in end_states
             ]
+
+            print("Running jobs will be terminated:")
+            print('\n'.join(non_terminal_job_ids))
         else:
             non_terminal_job_ids = []
 

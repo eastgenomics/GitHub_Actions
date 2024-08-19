@@ -45,49 +45,50 @@ def parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-def call_in_parallel(func, items) -> list:
-    """
-    Calls the given function in parallel using concurrent.futures on
-    the given set of items.
-
-    Parameters
-    ----------
-    func : callable
-        function to call on each item
-    items : list
-        list of items to call function on
-
-    Returns
-    -------
-    list
-        list of responses
-    """
-    results = []
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        concurrent_jobs = {
-            executor.submit(func, file_id, dest_folder): (file_id, dest_folder) for file_id, dest_folder in items
-        }
-
-        for future in concurrent.futures.as_completed(concurrent_jobs):
-            # access returned output as each is returned in any order
-            try:
-                results.append(future.result())
-            except Exception as exc:
-                # catch any errors that might get raised during querying
-                print(
-                    f"Error getting data for {concurrent_jobs[future]}: {exc}"
-                )
-                raise exc
-
-    return results
-
 class DXManage():
     """
     Methods for generic handling of dx related things
     """
     def __init__(self, args) -> None:
         self.args = args
+
+    @staticmethod
+    def call_in_parallel(func, items) -> list:
+        """
+        Calls the given function in parallel using concurrent.futures on
+        the given set of items.
+
+        Parameters
+        ----------
+        func : callable
+            function to call on each item
+        items : list
+            list of items to call function on
+
+        Returns
+        -------
+        list
+            list of responses
+        """
+        results = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            concurrent_jobs = {
+                executor.submit(func, file_id, dest_folder): (file_id, dest_folder) for file_id, dest_folder in items
+            }
+
+            for future in concurrent.futures.as_completed(concurrent_jobs):
+                # access returned output as each is returned in any order
+                try:
+                    results.append(future.result())
+                except Exception as exc:
+                    # catch any errors that might get raised during querying
+                    print(
+                        f"Error getting data for {concurrent_jobs[future]}: {exc}"
+                    )
+                    raise exc
+
+        return results
 
     def get_project_id_from_batch_job(self):
         """
@@ -124,7 +125,7 @@ class DXManage():
 
         return project_id
 
-    def get_single_path_from_prod_job(self):
+    def get_dias_single_path_from_prod_job(self):
         """
         Get the path to the Dias single folder in the original 002 job
 
@@ -148,8 +149,8 @@ class DXManage():
         self, source_project, dias_single_folder
     ):
         """
-        Clone the whole Dias single folder from the 002 project over to the
-        004 test project (because artemis requires files to be in the same
+        Clone whole folder from a project over to another project (because
+        artemis requires files to be in the same
         project)
 
         Parameters
@@ -291,7 +292,7 @@ class DXManage():
             _description_
         """
 
-        call_in_parallel(
+        self.call_in_parallel(
             self.move_one_file, existing_file_folder_pairs
         )
 
@@ -337,7 +338,7 @@ def main():
     args = parse_args()
     dx_manage = DXManage(args)
     source_project_id = dx_manage.get_project_id_from_batch_job()
-    single_folder = dx_manage.get_single_path_from_prod_job()
+    single_folder = dx_manage.get_dias_single_path_from_prod_job()
     ga_folder, existing_files = dx_manage.copy_whole_folder_to_project(
         source_project=source_project_id,
         dias_single_folder=single_folder
