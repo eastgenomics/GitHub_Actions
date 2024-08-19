@@ -60,6 +60,10 @@ jobs:
     runs-on: ubuntu-latest
     name: Upload and test changed files
 
+    defaults:
+      run:
+        working-directory: .github/workflows
+
     steps:
       - uses: actions/checkout@v4
 
