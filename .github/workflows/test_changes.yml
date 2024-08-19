@@ -1,5 +1,5 @@
 name: Perform integration testing
-on: [pull_request]
+on: [pull_request, workflow_call]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -9,10 +9,6 @@ jobs:
   get_changed_json_files:
     runs-on: ubuntu-latest
     name: Get changed files
-
-    defaults:
-      run:
-        working-directory: .github/workflows
 
     outputs:
       all_changed_files: ${{ steps.changed-files.outputs.all_changed_files }}
@@ -89,7 +85,7 @@ jobs:
         run: |
           echo "${CHANGED_FILE} was changed in this PR"
           dx login --token ${{ secrets.DX_TOKEN }} --noprojects
-          python get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_info.json -u ${ACTIONS_RUN_URL} -r ${{ github.run_id }}
+          python .github/workflows/get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_info.json -u ${ACTIONS_RUN_URL} -r ${{ github.run_id }}
           TEST_PROJ_ID=$(jq -r .project_id dx_project_info.json)
           FOLDER_NAME=$(jq -r .folder_name dx_project_info.json)
           echo "TEST_PROJ_ID=$TEST_PROJ_ID" >> $GITHUB_OUTPUT
@@ -130,7 +126,7 @@ jobs:
         env:
           UPLOADED_FILE_ID: ${{ steps.upload-config.outputs.FILE_ID }}
         run: |
-          python get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ vars.CONFIG_PATH }}
+          python .github/workflows/get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ vars.CONFIG_PATH }}
 
       - name: Generate diff report compared to production config
         id: generate-diff
@@ -166,7 +162,7 @@ jobs:
           PROD_JOB_ID=$(echo ${{ vars.PROD_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
           echo "Copying test data from 002 project which was used for ${ASSAY} job set (${TEST_PROJ_ID}) over to 004 testing project ${TEST_PROJ_ID}"
 
-          python copy_test_data.py -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -r ${{ github.run_id }}
+          python .github/workflows/copy_test_data.py -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -r ${{ github.run_id }}
           echo "PROD_JOB_ID=$PROD_JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Run tests in DNAnexus
@@ -180,7 +176,7 @@ jobs:
           echo "Current release version of eggd_dias_single_workflow GitHub repository is ${RELEASE_VERSION}"
           echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${PROD_JOB_ID}"
 
-          python run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -r ${{ github.run_id }} -o job_id.txt
+          python .github/workflows/run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -r ${{ github.run_id }} -o job_id.txt
 
           JOB_ID=$(cat job_id.txt)
           echo "JOB_ID=$JOB_ID" >> $GITHUB_OUTPUT
@@ -209,7 +205,7 @@ jobs:
         env:
             JOB_ID: ${{ steps.run-testing-jobs.outputs.JOB_ID }}
         run: |
-          python check_jobs_complete.py -i ${JOB_ID} -o job_command_info.txt
+          python .github/workflows/check_jobs_complete.py -i ${JOB_ID} -o job_command_info.txt
       - uses: actions/upload-artifact@v4
         with:
           name: job-info
