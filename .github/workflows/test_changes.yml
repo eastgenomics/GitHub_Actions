@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     name: Get changed files
 
+    defaults:
+      run:
+        working-directory: .github/workflows
+
     outputs:
       all_changed_files: ${{ steps.changed-files.outputs.all_changed_files }}
       all_changed_files_count: ${{ steps.changed-files.outputs.all_changed_files_count }}
