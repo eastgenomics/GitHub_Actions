@@ -51,10 +51,10 @@ class DXManage():
 
         Returns
         -------
-        launched_jobs_list : list
-            list of jobs/analyses launched
         input_dict : dict
             dictionary of inputs to the test job
+        launched_jobs_list : list
+            list of jobs/analyses launched
         """
         # Wait on eggd_dias_batch job to finish to get info
         dx.DXJob(dxid=self.args.job_id).wait_on_done()

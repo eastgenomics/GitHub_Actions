@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        '-r',
+        '-i',
         '--run_id',
         required=True,
         type=str,
@@ -78,6 +78,26 @@ def parse_args() -> argparse.Namespace:
         required=True,
         type=str,
         help="Name of the file to write the launched job ID to"
+    )
+
+
+    parser.add_argument(
+        '-a',
+        '--assay',
+        required=True,
+        type=str,
+        choices=['TWE', 'CEN'],
+        help=(
+            "The assay that the updated config file relates to"
+        )
+    )
+
+    parser.add_argument(
+        'r',
+        '--run_cnv_calling',
+        required=True,
+        type=bool,
+        help='If CEN assay, whether to re-use CNV calling job outputs'
     )
 
     return parser.parse_args()
@@ -135,6 +155,53 @@ class DXManage():
 
         return json_contents
 
+    def get_cnv_calling_job_id(self):
+        """
+        Get original CNV calling job ID which was launched by the production
+        eggd_dias_batch_job
+
+        Returns
+        -------
+        cnv_calling_jobs : str
+            DX job ID of the CNV calling job which was launched by the prod
+            eggd_dias_batch job given
+
+        Raises
+        ------
+        AssertionError
+            When more than one GATKgCNV job was launched by the original
+            eggd_dias_batch job
+        """
+        print(
+            "Getting CNV calling job ID from original eggd_dias_batch job"
+            f" {self.args.job_id}"
+        )
+        # Describe the job to get the output launched jobs
+        job_details = dx.DXJob(dxid=self.args.job_id).describe()
+
+        # Get output launched jobs
+        job_output_ids = job_details.get('output').get('launched_jobs')
+        launched_list = job_output_ids.split(',')
+
+        # Get just jobs launched (as will include reports analyses)
+        launched_jobs = [
+            job for job in launched_list if job.startswith('job-')
+        ]
+
+        # Get any jobs with GATKgCNV in the name
+        cnv_calling_jobs = [
+            job for job in launched_jobs
+            if 'GATKgCNV' in dx.describe(job)['name']
+        ]
+
+        # Assert we've found one job
+        assert len(cnv_calling_jobs) == 1, (
+            "Error: No or multiple CNV calling jobs launched by "
+            f"eggd_dias_batch job {self.args.job_id} given"
+        )
+
+        return cnv_calling_jobs[0]
+
     def get_project_id_from_batch_job(self):
         """
         Get the project ID from the batch job that was run
@@ -153,12 +220,6 @@ class DXManage():
             complete successfully
         """
         job_details = dx.describe(self.args.assay_job_id)
-        project_id = job_details.get('project')
-
-        assert project_id, (
-            "Couldn't parse project ID from the job ID given. Please check"
-            " that this is a valid eggd_dias_batch job ID"
-        )
 
         assert job_details.get('state') == 'done', (
             f"The production job ID given ({self.args.assay_job_id}) for "
@@ -166,6 +227,13 @@ class DXManage():
             "successfully. Please check this job and instead provide a "
             "job within a 002 project for the relevant assay which did "
             "complete successfully"
+        )
+
+        project_id = job_details.get('project')
+
+        assert project_id, (
+            "Couldn't parse project ID from the job ID given. Please check"
+            " that this is a valid eggd_dias_batch job ID"
         )
 
         return project_id
@@ -216,7 +284,10 @@ class DXManage():
             ]
 
             print("Running jobs will be terminated:")
-            print('\n'.join(non_terminal_job_ids))
+            print('\n'.join([
+                f"{job} - {dx.describe(job)['describe']['name']}"
+                for job in non_terminal_job_ids
+            ]))
         else:
             non_terminal_job_ids = []
 
@@ -408,7 +479,7 @@ class DXManage():
         return folder_name
 
     def set_off_test_jobs(
-        self, updated_config_id, folder_name, multiqc_report
+        self, updated_config_id, folder_name, multiqc_report, cnv_job_id
     ) -> str:
         """
         Set off the job in the test project using inputs from
@@ -422,6 +493,9 @@ class DXManage():
             name of the DX folder in the test project to save outputs to
         multiqc_report : str
             DX file ID of the MultiQC report in format project-id:file-id
+        cnv_job_id: str
+            DX job ID of CNV calling job to re-use outputs from
+
         Returns
         -------
         job_id : str
@@ -438,7 +512,7 @@ class DXManage():
         original_single_path = job_inputs.get('single_output_dir')
 
         # Replace some inputs to test our config file
-        _, multi_id = multiqc_report.split(':')
+        _, multi_file_id = multiqc_report.split(':')
         job_inputs['single_output_dir'] = (
             f'{folder_name}{original_single_path}'
         )
@@ -446,12 +520,17 @@ class DXManage():
             '$dnanexus_link': updated_config_id
         }
         job_inputs['multiqc_report'] = {
-            '$dnanexus_link': multi_id
+            '$dnanexus_link': multi_file_id
         }
 
         # Only set off jobs for a subset of samples - this is set by a
         # repository GitHub Actions variable
         job_inputs['sample_limit'] = self.args.test_sample_limit
+
+        # If CNV calling job ID given - re-use the job outputs - set by
+        # GitHub Actions repository variable
+        if cnv_job_id:
+            job_inputs['cnv_call_job_id'] = cnv_job_id
 
         print("Setting off job in test project with updated config file:\n")
         prettier_print(job_inputs)
@@ -512,13 +591,21 @@ def main():
     # Check dias_single version used in 002 project and set off test jobs
     dx_manage.check_dias_single_version_which_generated_data(project_id)
 
+    # If CEN assay and variable in repo is set to not run CNV calling,
+    # get CNV calling job ID from prod CEN job given
+    if args.assay == 'CEN' and not args.run_cnv_calling:
+        cnv_calling_job_id = dx_manage.get_cnv_calling_job_id()
+    else:
+        cnv_calling_job_id = None
+
     # Set off test job with the updated config based on the prod job given
     # for the relevant assay
     folder_name = dx_manage.get_actions_folder()
     job_id = dx_manage.set_off_test_jobs(
         updated_config_id,
         folder_name,
-        multiqc_report
+        multiqc_report,
+        cnv_calling_job_id
     )
     dx_manage.write_out_job_id(job_id, args.out_file)
 

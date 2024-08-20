@@ -19,14 +19,15 @@ Certain constants must be set in the repository which holds the configuration fi
 
 #### Secrets
 
-| Secret  | Example | Description |
-| --- | --- | --- |
-| DX_TOKEN  | `a1b2c3`  | Authorisation token for DNAnexus. Requires ability to view, create projects, upload data and run jobs.
+| Secret  | Type | Example | Description |
+| --- | --- | --- | --- |
+| DX_TOKEN  | `str` | `a1b2c3`  | Authorisation token for DNAnexus. Requires permissions to view, create projects, upload and run jobs.
 
 #### Variables
 
-| Variable  | Example | Description  |
-| --- | --- | --- |
-| CONFIG_PATH  | `project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/dias_batch_configs` | The path in 001_Reference where production configuration files are stored |
-| PROD_JOBS  | `'{"TWE": "job-GpfQ2fQ4fj3XG67xkbPFXKZg","CEN": "job-Gpbq1q847X23zF1568K3x3q8"}'` | Jobs which were run in production 002 projects for each assay which can be used for testing to re-run with the updated configuration file |
-| TEST_SAMPLE_LIMIT  | 2 | The number of samples to set off testing jobs for |
+| Variable  | Type | Example | Description  |
+| --- | --- | --- | --- |
+| CONFIG_PATH  | `str` | `project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/dias_batch_configs` | The path in 001_Reference where production configuration files are stored |
+| PROD_JOBS  | `str` | `'{"TWE": "job-GpfQ2fQ4fj3XG67xkbPFXKZg","CEN": "job-Gpbq1q847X23zF1568K3x3q8"}'` | Jobs which were run in production 002 projects for each assay which can be used for testing to re-run with the updated configuration file |
+| TEST_SAMPLE_LIMIT  | `int` | 2 | The number of samples to set off testing jobs for |
+| RUN_CNV_CALLING  | `bool` | True | If True, runs CNV calling and if False does not. If it is a CEN config being updated and RUN_CNV_CALLING is set to False, will re-use inputs from the job given in PROD_JOBS. |

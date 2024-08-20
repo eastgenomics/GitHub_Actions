@@ -142,6 +142,21 @@ jobs:
           name: diff-report
           path: config_diff.html
 
+      - name: Create comment body for diff report
+        id: create-diff-comment-body
+        env:
+          ARTIFACT_URL: ${{ steps.generate-diff.outputs.artifact-url }}
+        run: |
+          body="Diff report created to compare the updated config (${CHANGED_FILE}) to the current production config in 001_Reference: $ARTIFACT_URL"
+          echo "body=$body" >> $GITHUB_OUTPUT
+
+      - name: Create PR comment with URL to download diff report
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.create-diff-comment-body.outputs.body }}
+
       - name: Get current release version of Dias single workflow
         id: get-release
         uses: pozetroninc/github-action-get-latest-release@master
@@ -172,7 +187,7 @@ jobs:
           echo "Current release version of eggd_dias_single_workflow GitHub repository is ${RELEASE_VERSION}"
           echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${PROD_JOB_ID}"
 
-          python .github/workflows/run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -r ${{ github.run_id }} -o job_id.txt
+          python .github/workflows/run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -a ${ASSAY} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -i ${{ github.run_id }} -o job_id.txt -r ${{ vars.RUN_CNV_CALLING }}
 
           JOB_ID=$(cat job_id.txt)
           echo "JOB_ID=$JOB_ID" >> $GITHUB_OUTPUT
