@@ -184,10 +184,10 @@ class DXManage():
         """
         print(
             "Getting CNV calling job ID from original eggd_dias_batch job"
-            f" {self.args.job_id}"
+            f" {self.args.assay_job_id}"
         )
         # Describe the job to get the output launched jobs
-        job_details = dx.DXJob(dxid=self.args.job_id).describe()
+        job_details = dx.DXJob(dxid=self.args.assay_job_id).describe()
 
         # Get output launched jobs
         job_output_ids = job_details.get('output').get('launched_jobs')
@@ -207,7 +207,7 @@ class DXManage():
         # Assert we've found one job
         assert len(cnv_calling_jobs) == 1, (
             "Error: No or multiple CNV calling jobs launched by "
-            f"eggd_dias_batch job {self.args.job_id} given"
+            f"eggd_dias_batch job {self.args.assay_job_id} given"
         )
 
         cnv_calling_job = cnv_calling_jobs[0]
