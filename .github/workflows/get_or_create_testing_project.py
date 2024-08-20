@@ -247,10 +247,6 @@ class DXManage():
             The name of the folder that has been created in the DX test
             project
 
-        Raises
-        ------
-        RuntimeError
-            When a folder for the GitHub Actions run already exists
         """
         # Create name for the folder to put the job output in
         folder_name = f"/GitHub_Actions_run-{self.args.run_id}"
@@ -264,12 +260,6 @@ class DXManage():
                     'only': 'folders'
                 },
                 always_retry=True
-            )
-
-            raise RuntimeError(
-                f"Error: folder for this GitHub Actions run {folder_name}"
-                "already exists. Exiting because this is not expected to "
-                "happen"
             )
 
         except dx.exceptions.ResourceNotFound:
