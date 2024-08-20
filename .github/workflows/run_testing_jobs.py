@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        'r',
+        '-r',
         '--run_cnv_calling',
         required=True,
         type=bool,
@@ -213,13 +213,20 @@ class DXManage():
 
         Raises
         ------
-        AssertionError
-            When the project ID cannot be parsed from the job ID given
+        DXError
+            When dx describe cannot be called on job ID given (not valid job)
         AssertionError
             When the job ID which is given to re-run testing with did not
             complete successfully
         """
-        job_details = dx.describe(self.args.assay_job_id)
+        try:
+            job_details = dx.describe(self.args.assay_job_id)
+        except dx.exceptions.DXError as err:
+            # dx error raised - can't call describe on job ID given
+            raise dx.exceptions.DXError(
+                f"Cannot call dx describe on job ID {self.args.assay_job_id} "
+                f"given as prod job:\n {err}"
+            )
 
         assert job_details.get('state') == 'done', (
             f"The production job ID given ({self.args.assay_job_id}) for "
@@ -230,11 +237,6 @@ class DXManage():
         )
 
         project_id = job_details.get('project')
-
-        assert project_id, (
-            "Couldn't parse project ID from the job ID given. Please check"
-            " that this is a valid eggd_dias_batch job ID"
-        )
 
         return project_id
 

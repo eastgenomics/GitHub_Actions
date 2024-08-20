@@ -138,6 +138,7 @@ jobs:
           icdiff --unified=3 --line-numbers --cols=250 -H <(dx cat ${PROD_CONFIG_ID}) -L ${PROD_CONFIG_NAME} <(dx cat ${UPLOADED_FILE_ID}) -L ${UPDATED_CONFIG_NAME} | aha > config_diff.html
           echo "Diff report generated"
       - uses: actions/upload-artifact@v4
+        id: artifact-upload-step
         with:
           name: diff-report
           path: config_diff.html
@@ -145,9 +146,9 @@ jobs:
       - name: Create comment body for diff report
         id: create-diff-comment-body
         env:
-          ARTIFACT_URL: ${{ steps.generate-diff.outputs.artifact-url }}
+          ARTIFACT_URL: ${{ steps.artifact-upload-step.outputs.artifact-url }}
         run: |
-          body="Diff report created to compare the updated config (${CHANGED_FILE}) to the current production config in 001_Reference: $ARTIFACT_URL"
+          body="Diff report created which compares the updated config in this PR (${CHANGED_FILE}) to the current production config in 001_Reference: ${ARTIFACT_URL}"
           echo "body=$body" >> $GITHUB_OUTPUT
 
       - name: Create PR comment with URL to download diff report
