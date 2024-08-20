@@ -1,5 +1,10 @@
 name: Perform integration testing
-on: [pull_request, workflow_call]
+on:
+  pull_request:
+  workflow_call:
+    secrets:
+      DX_TOKEN:
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
