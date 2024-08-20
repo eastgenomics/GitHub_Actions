@@ -86,6 +86,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          echo "${{ vars.RUN_CNV_CALLING }}"
           python -m pip install --upgrade pip
           if [ -f reusable-workflow/requirements.txt ]; then pip install -r reusable-workflow/requirements.txt; fi
           sudo apt-get install -y aha

@@ -312,12 +312,12 @@ class DXManage():
                 job['id'] for job in executions
                 if job['describe']['state'] not in end_states
             ]
-
-            print("Running jobs will be terminated:")
-            print('\n'.join([
-                f"{job} - {dx.describe(job)['describe']['name']}"
-                for job in non_terminal_job_ids
-            ]))
+            if non_terminal_job_ids:
+                print("Running jobs will be terminated:")
+                print('\n'.join([
+                    f"{job} - {dx.describe(job)['describe']['name']}"
+                    for job in non_terminal_job_ids
+                ]))
         else:
             non_terminal_job_ids = []
 
