@@ -69,6 +69,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: eastgenomics/GitHub_Actions
+          ref: IN-727_check_jobs
           path: reusable-workflow
 
       - name: Set up Python 3.8
