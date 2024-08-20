@@ -130,8 +130,7 @@ class DXManage():
     def __init__(self, args) -> None:
         self.args = args
 
-    @staticmethod
-    def read_in_json(config_info_file) -> dict:
+    def read_in_config(self) -> dict:
         """
         Read in config JSON file to a dict
 
@@ -145,12 +144,12 @@ class DXManage():
         config_dict: dict
             the content of the JSON converted to a dict
         """
-        if not config_info_file.endswith('.json'):
+        if not self.args.config_info.endswith('.json'):
             raise RuntimeError(
                 'Error: invalid config file given - not a JSON file'
             )
 
-        with open(config_info_file, 'r', encoding='utf8') as json_file:
+        with open(self.args.config_info, 'r', encoding='utf8') as json_file:
             json_contents = json.load(json_file)
 
         return json_contents
@@ -162,7 +161,7 @@ class DXManage():
 
         Returns
         -------
-        cnv_calling_jobs : str
+        cnv_calling_job : str
             DX job ID of the CNV calling job which was launched by the prod
             eggd_dias_batch job given
 
@@ -200,11 +199,13 @@ class DXManage():
             f"eggd_dias_batch job {self.args.job_id} given"
         )
 
-        return cnv_calling_jobs[0]
+        cnv_calling_job = cnv_calling_jobs[0]
+
+        return cnv_calling_job
 
     def get_project_id_from_batch_job(self):
         """
-        Get the project ID from the batch job that was run
+        Get the project ID from the eggd_dias_batch job that was run
 
         Returns
         -------
@@ -248,6 +249,22 @@ class DXManage():
         -------
         executions : list
             list of dicts, each containing information about a job/analysis
+        Example:
+        [
+            {
+                'id': 'job-Gq26qv84PZYv69029zV69xVf',
+                'describe': {
+                    'id': 'job-Gq26qv84PZYv69029zV69xVf',
+                    'state': 'done'
+                }
+            },
+            {
+                'id': 'job-Gq1ZPKQ4PZYfX032b7q8Kpgk',
+                'describe': {
+                    'id': 'job-Gq1ZPKQ4PZYfX032b7q8Kpgk',
+                    'state': 'terminated'
+                }
+            }
         """
         executions = list(dx.find_executions(
             project=self.args.test_project_id,
@@ -480,19 +497,21 @@ class DXManage():
 
         return folder_name
 
-    def set_off_test_jobs(
-        self, updated_config_id, folder_name, multiqc_report, cnv_job_id
-    ) -> str:
+    def update_inputs_to_batch_job(
+        self, folder_name, updated_config_id, multiqc_report, cnv_job_id
+    ):
         """
-        Set off the job in the test project using inputs from
-        the original job but with the updated config file instead
+        Update the inputs to eggd_dias_batch so we set things off with the
+        updated config, number of test samples required (set as a repo
+        variable), the original MultiQC report and, if required, re-use
+        the CNV calling job outputs to make CNV reports
 
         Parameters
         ----------
+        folder_name : str
+            name of the folder where the Dias single outputs are
         updated_config_id : str
             DX file ID of the updated config file
-        folder_name: str
-            name of the DX folder in the test project to save outputs to
         multiqc_report : str
             DX file ID of the MultiQC report in format project-id:file-id
         cnv_job_id: str
@@ -500,8 +519,11 @@ class DXManage():
 
         Returns
         -------
-        job_id : str
-            DX job ID of the test job that has been set off
+        app_name : str
+            name of the app to launch
+        job_inputs : dict
+            dictionary containing the updated job inputs to set off the
+            eggd_dias_batch job
         """
         # Describe the original job to get the inputs
         job_details = dx.describe(self.args.assay_job_id)
@@ -533,6 +555,30 @@ class DXManage():
         # GitHub Actions repository variable
         if cnv_job_id:
             job_inputs['cnv_call_job_id'] = cnv_job_id
+
+        return app_name, job_inputs
+
+    def set_off_test_jobs(
+        self, job_inputs, app_name, folder_name
+    ) -> str:
+        """
+        Set off the job in the test project using inputs from
+        the original job but with the updated config file instead
+
+        Parameters
+        ----------
+        job_inputs : dict
+            dictionary with the inputs to set off the job with
+        app_name : str
+            DX file ID of the MultiQC report in format project-id:file-id
+        folder_name: str
+            name of the DX folder in the test project to save outputs to
+
+        Returns
+        -------
+        job_id : str
+            DX job ID of the test job that has been set off
+        """
 
         print("Setting off job in test project with updated config file:\n")
         prettier_print(job_inputs)
@@ -574,7 +620,7 @@ def main():
     """
     args = parse_args()
     dx_manage = DXManage(args)
-    config_info = dx_manage.read_in_json(args.config_info)
+    config_info = dx_manage.read_in_config()
     updated_config_id = config_info.get('updated').get('dxid')
     project_id = dx_manage.get_project_id_from_batch_job()
 
@@ -603,11 +649,18 @@ def main():
     # Set off test job with the updated config based on the prod job given
     # for the relevant assay
     folder_name = dx_manage.get_actions_folder()
+    # Update the original inputs to set off our batch job
+    app_name, job_inputs = dx_manage.update_inputs_to_batch_job(
+        folder_name=folder_name,
+        updated_config_id=updated_config_id,
+        multiqc_report=multiqc_report,
+        cnv_job_id=cnv_calling_job_id
+    )
+    # Launch the job
     job_id = dx_manage.set_off_test_jobs(
-        updated_config_id,
-        folder_name,
-        multiqc_report,
-        cnv_calling_job_id
+        job_inputs=job_inputs,
+        app_name=app_name,
+        folder_name=folder_name
     )
     dx_manage.write_out_job_id(job_id, args.out_file)
 

@@ -53,16 +53,49 @@ class DXManage():
         -------
         input_dict : dict
             dictionary of inputs to the test job
+        Example:
+        {
+            'assay': 'TWE',
+            'artemis': True,
+            'single_output_dir': (
+                '/GitHub_Actions_run-10454164028/output/TWE-240802_1153'
+            ),
+            'snv_reports': True,
+            'qc_file': {
+                '$dnanexus_link': 'file-GpfPFJ84fj3x93YZP4V4y8K1'
+            },
+            'manifest_files': [{
+                '$dnanexus_link': 'file-GpfQ1PQ4fj3QzGV8p1y3jY3f'
+            }],
+            'assay_config_dir': (
+                'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/'
+                'dias_batch_configs/'
+            ),
+            'split_tests': True,
+            'exclude_controls': True,
+            'unarchive': False,
+            'unarchive_only': False,
+            'assay_config_file': {
+                '$dnanexus_link': 'file-Gq1ZGjQ4PZYy7pJGGXyJ763x'
+            },
+            'multiqc_report': {
+                '$dnanexus_link': 'file-GpfK94Q49ppgpjF7gKX5Fkvb'
+            },
+            'sample_limit': 1
+        }
         launched_jobs_list : list
-            list of jobs/analyses launched
+            list of DX IDs for jobs/analyses launched
         """
-        # Wait on eggd_dias_batch job to finish to get info
+        # Wait on eggd_dias_batch job to finish so we can get launched jobs
+        # info
         dx.DXJob(dxid=self.args.job_id).wait_on_done()
 
         print("All testing jobs set off successfully")
 
         print(f"Querying details for eggd_dias_batch job {self.args.job_id}")
         # Describe the job to get the input and output launched jobs
+        # we only want to do this when the job is finished so we can get the
+        # outputs - these don't exist earlier
         job_details = dx.DXJob(dxid=self.args.job_id).describe()
         input_dict = job_details.get('input')
 
@@ -80,7 +113,7 @@ class DXManage():
         Parameters
         ----------
         job_inputs : dict
-            ID of the job run in DNAnexus
+            Inputs of the job which has been run in DNAnexus
         out_name : str
             name of the file to write the original job command to
         """
@@ -96,21 +129,28 @@ class DXManage():
             print("\n".join(dict_list), file=out_file)
 
     @staticmethod
-    def wait_on_done(all_job_ids) -> None:
+    def wait_on_done(all_job_ids):
         """
-        Hold this Action until all job(s) launched have completed successfully
+        Hold the GitHub Actions run until all job(s) launched have completed
+        successfully
 
         Parameters
         ----------
         all_job_ids : list
             list of jobs/analyses launched by GitHub Actions
-        """
 
+        Raises
+        ------
+        DXJobFailureError
+            If any of the jobs/analyses launched by our job fail or are
+            terminated
+        """
         print(
             f'Holding check until {len(all_job_ids)} job(s)/analyses complete'
         )
 
-        # Wait til all things launched by eggd_dias_batch complete successfully
+        # Wait for all things launched by eggd_dias_batch (e.g. reports and
+        # artemis) to complete successfully
         for job in all_job_ids:
             # check if it's a job - usually the artemis job
             if job.startswith('job-'):
@@ -139,7 +179,8 @@ class DXManage():
 
 def main():
     """
-    Run main functions for getting or creating a DX test project
+    Run main functions for checking that the jobs we've run complete
+    successfully
     """
     args = parse_args()
     dx_manage = DXManage(args)
