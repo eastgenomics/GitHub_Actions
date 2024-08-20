@@ -106,9 +106,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '-r',
         '--run_cnv_calling',
-        required=True,
-        type=bool,
-        help='If CEN assay, whether to re-use CNV calling job outputs'
+        default=False,
+        action='store_true',
+        help='Whether to run CNV calling'
     )
 
     return parser.parse_args()
@@ -606,7 +606,7 @@ def main():
 
     # If CEN assay and variable in repo is set to not run CNV calling,
     # get CNV calling job ID from prod CEN job given
-    if args.assay == 'CEN' and args.run_cnv_calling == 'False':
+    if args.assay == 'CEN' and not args.run_cnv_calling:
         cnv_calling_job_id = dx_manage.get_cnv_calling_job_id()
     else:
         cnv_calling_job_id = None

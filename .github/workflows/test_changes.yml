@@ -86,7 +86,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          echo "${{ vars.RUN_CNV_CALLING }}"
           python -m pip install --upgrade pip
           if [ -f reusable-workflow/requirements.txt ]; then pip install -r reusable-workflow/requirements.txt; fi
           sudo apt-get install -y aha
@@ -209,7 +208,14 @@ jobs:
           echo "Current release version of eggd_dias_single_workflow GitHub repository is ${RELEASE_VERSION}"
           echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${PROD_JOB_ID}"
 
-          python reusable-workflow/.github/workflows/run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -a ${ASSAY} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -i ${{ github.run_id }} -f ${FOLDER_NAME} -o job_id.txt -r ${{ vars.RUN_CNV_CALLING }}
+          if [ ${{ vars.RUN_CNV_CALLING }} == "True" ];
+          then
+            EXTRA_ARG="--run_cnv_calling"
+          else
+            EXTRA_ARG=""
+          fi
+
+          python reusable-workflow/.github/workflows/run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -a ${ASSAY} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -i ${{ github.run_id }} -f ${FOLDER_NAME} -o job_id.txt ${EXTRA_ARG}
 
           JOB_ID=$(cat job_id.txt)
           echo "JOB_ID=$JOB_ID" >> $GITHUB_OUTPUT
