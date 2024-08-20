@@ -1,9 +1,11 @@
 name: Perform integration testing
 on:
   pull_request:
+
   workflow_call:
     secrets:
       DX_TOKEN:
+        description: 'DNAnexus token'
         required: true
 
 concurrency:

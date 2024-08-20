@@ -555,6 +555,7 @@ class DXManage():
         # GitHub Actions repository variable
         if cnv_job_id:
             job_inputs['cnv_call_job_id'] = cnv_job_id
+            job_inputs['cnv_call'] = False
 
         return app_name, job_inputs
 
@@ -641,7 +642,7 @@ def main():
 
     # If CEN assay and variable in repo is set to not run CNV calling,
     # get CNV calling job ID from prod CEN job given
-    if args.assay == 'CEN' and not args.run_cnv_calling:
+    if args.assay == 'CEN' and args.run_cnv_calling == 'False':
         cnv_calling_job_id = dx_manage.get_cnv_calling_job_id()
     else:
         cnv_calling_job_id = None
