@@ -81,6 +81,18 @@ def prettier_print(thing) -> None:
     print(json.dumps(thing, indent='⠀⠀'))
 
 
+def time_stamp() -> str:
+    """
+    Returns string of date & time formatted as YYMMDD_HHMM
+
+    Returns
+    -------
+    str
+        String of current date and time as YYMMDD_HHMM
+    """
+    return datetime.now().strftime("%y%m%d_%H%M")
+
+
 class DXManage():
     """
     Methods for generic handling of dx related things
@@ -231,7 +243,7 @@ class DXManage():
 
         return project_id
 
-    def create_dx_folder(self, test_project_id):
+    def create_dx_folder(self, test_project_id, timestamp):
         """
         Creates a DNAnexus folder for the GitHub Actions run if it does not
         exist
@@ -240,6 +252,8 @@ class DXManage():
         ----------
         test_project_id : str
             ID of the DX project to create the folder in
+        timestamp : str
+            the datetime in format "%y%m%d_%H%M" e.g. 220131_1234
 
         Returns
         -------
@@ -249,7 +263,7 @@ class DXManage():
 
         """
         # Create name for the folder to put the job output in
-        folder_name = f"/GitHub_Actions_run-{self.args.run_id}"
+        folder_name = f"/GitHub_Actions_run-{self.args.run_id}_{timestamp}"
 
         # Try and find a folder in the project which matches this name
         try:
@@ -309,7 +323,8 @@ def main():
         existing_projects=existing_test_project
     )
     folder_created = dx_manage.create_dx_folder(
-        test_project_id=project_004_id
+        test_project_id=project_004_id,
+        timestamp=time_stamp()
     )
     dx_manage.write_project_id_to_file(
         project_id=project_004_id,

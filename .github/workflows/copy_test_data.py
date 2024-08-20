@@ -43,6 +43,17 @@ def parse_args() -> argparse.Namespace:
         help="ID of the GitHub Actions run"
     )
 
+    parser.add_argument(
+        '-f',
+        '--folder_name',
+        required=True,
+        type=str,
+        help=(
+            'Name of the GitHub Actions folder which was made in the previous'
+            'step'
+        )
+    )
+
     return parser.parse_args()
 
 class DXManage():
@@ -137,7 +148,7 @@ class DXManage():
         return project_id, dias_single_folder
 
     def copy_whole_folder_to_project(
-        self, source_project, folder_name
+        self, source_project, copy_folder_name
     ):
         """
         Clone whole folder from a project over to the 004 test project.
@@ -153,17 +164,13 @@ class DXManage():
 
         Returns
         -------
-        github_actions_folder: str
-            name of the GitHub Actions folder which has already been created
-            by the GitHub Actions run
         existing_copied_files: list
             list with IDs of any files which already existed in the project
         """
         # Get just the main folder name without the subfolder, e.g
         # '/output/TWE-240802_1153' -> '/output'
         # as we want to copy both folders (not just the subfolder)
-        main_folder = '/'.join(folder_name.split('/')[:-1])
-        github_actions_folder = f'/GitHub_Actions_run-{self.args.run_id}'
+        main_folder = '/'.join(copy_folder_name.split('/')[:-1])
 
         # Clone the whole Dias single folder from the 002 project over to the
         # test project in the relevant folder for the GitHub Actions run
@@ -173,13 +180,13 @@ class DXManage():
                 'folders': [main_folder],
                 'project': self.args.test_project_id,
                 'parents': True,
-                'destination': github_actions_folder
+                'destination': self.args.folder_name
             }
         )
 
         existing_copied_files = clone_response.get('exists')
 
-        return github_actions_folder, existing_copied_files
+        return existing_copied_files
 
     def find_data_in_original_path(self, project_id, folder_name):
         """
@@ -238,9 +245,8 @@ class DXManage():
 
         return original_data
 
-    @staticmethod
     def prefix_folders_with_github_actions_folder(
-        files_in_002_project, existing_files, ga_folder_name
+        self, files_in_002_project, existing_files
     ):
         """
         Add a prefix with the GitHub Actions folder name to the folder path
@@ -257,8 +263,6 @@ class DXManage():
             in the original 002 project
         existing_file_details : list
             list of file IDs for files which already exist in the project
-        ga_folder_name : str
-            name of the GitHub Actions folder for the run
 
         Returns
         -------
@@ -296,7 +300,7 @@ class DXManage():
         modified_folders = [{
             **item, 'describe': {
                 **item['describe'],
-                'folder': ga_folder_name + item['describe']['folder']
+                'folder': self.args.folder_name + item['describe']['folder']
             }
         } for item in existing_file_details]
 
@@ -389,7 +393,7 @@ class DXManage():
 
         return qc_status_id
 
-    def copy_file_to_test_project_folder(self, file_id, folder_name):
+    def copy_file_to_test_project_folder(self, file_id):
         """
         Copy a file to a specific folder in the 004 test project
 
@@ -397,8 +401,6 @@ class DXManage():
         ----------
         file_id : str
             DX file ID of the file to be copied
-        folder_name : str
-            name of the folder to copy the file into
         """
         # Create DXFile object for file in original project
         source_project, file_id = file_id.split(':')
@@ -407,7 +409,7 @@ class DXManage():
         # Copy file over to folder in another project
         file_obj.clone(
             self.args.test_project_id,
-            folder=folder_name
+            folder=self.args.folder_name
         )
 
 
@@ -422,9 +424,9 @@ def main():
     # Copy the whole Dias single folder from the 002 project to the 004 test
     # project so files are in the right project for eggd_artemis. This will
     # return any file IDs which already exist
-    ga_folder, existing_files = dx_manage.copy_whole_folder_to_project(
+    existing_files = dx_manage.copy_whole_folder_to_project(
         source_project=source_project_id,
-        folder_name=single_folder
+        copy_folder_name=single_folder
     )
     # Find all files in the original dias single path in the 002 project
     dias_files_in_original_project = dx_manage.find_data_in_original_path(
@@ -435,8 +437,7 @@ def main():
     # to the correct folder for the GitHub Actions run and move them
     file_folder_pairs = dx_manage.prefix_folders_with_github_actions_folder(
         files_in_002_project=dias_files_in_original_project,
-        existing_files=existing_files,
-        ga_folder_name=ga_folder
+        existing_files=existing_files
     )
     dx_manage.move_already_copied_files_to_correct_folder(
         file_folder_pairs
@@ -452,7 +453,7 @@ def main():
     # If there is, move it to the correct folder in the same 004 project
     if qc_status_id:
         _, file_id = qc_status_id.split(':')
-        dx_manage.move_one_file(file_id, ga_folder)
+        dx_manage.move_one_file(file_id, args.folder_name)
     # Otherwise find the QC status file in original 002 project and copy it
     # to the correct folder in our 004 test project
     else:
@@ -461,7 +462,7 @@ def main():
             "Error: No QC status file found in original project "
             f"{source_project_id}"
         )
-        dx_manage.copy_file_to_test_project_folder(qc_status, ga_folder)
+        dx_manage.copy_file_to_test_project_folder(qc_status)
 
 if __name__ == '__main__':
     main()

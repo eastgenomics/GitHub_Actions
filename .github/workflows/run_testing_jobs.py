@@ -73,6 +73,17 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        '-f',
+        '--folder_name',
+        required=True,
+        type=str,
+        help=(
+            'Name of the GitHub Actions folder which was made in the previous'
+            'step'
+        )
+    )
+
+    parser.add_argument(
         '-o',
         '--out_file',
         required=True,
@@ -456,49 +467,8 @@ class DXManage():
 
         return multiqc_report_id
 
-    def get_actions_folder(self):
-        """
-        Get the folder that was created in the test project to put the
-        output of the test jobs into
-
-        Returns
-        -------
-        folder_name : str
-            name of the folder which was created in an earlier step which
-            contains the GitHub Actions run ID
-
-        Raises
-        ------
-        AssertionError
-            When no or multiple folders are found in the test project which
-            relate to this GitHub Actions run
-        """
-        # Find folders in the test 004 project
-        folders_list = dx.api.project_list_folder(
-            object_id=self.args.test_project_id,
-            input_params={
-                'only': 'folders'
-            }
-        )
-
-        # Get name(s) of folders which have the GitHub Actions run ID in the
-        # name -> this should only be one. If no folders in project, this will
-        # be an empty list
-        folder_names = [
-            folder for folder in folders_list.get('folders') if self.args.run_id in folder
-        ]
-
-        assert len(folder_names) == 1, (
-            "Error: No or multiple folder(s) found for this GitHub Actions run"
-            f" in the test project {self.args.test_project_id}"
-        )
-
-        folder_name = folder_names[0]
-
-        return folder_name
-
     def update_inputs_to_batch_job(
-        self, folder_name, updated_config_id, multiqc_report, cnv_job_id
+        self, updated_config_id, multiqc_report, cnv_job_id
     ):
         """
         Update the inputs to eggd_dias_batch so we set things off with the
@@ -508,8 +478,6 @@ class DXManage():
 
         Parameters
         ----------
-        folder_name : str
-            name of the folder where the Dias single outputs are
         updated_config_id : str
             DX file ID of the updated config file
         multiqc_report : str
@@ -538,7 +506,7 @@ class DXManage():
         # Replace some inputs to test our config file
         _, multi_file_id = multiqc_report.split(':')
         job_inputs['single_output_dir'] = (
-            f'{folder_name}{original_single_path}'
+            f'{self.args.folder_name}{original_single_path}'
         )
         job_inputs['assay_config_file'] = {
             '$dnanexus_link': updated_config_id
@@ -559,9 +527,7 @@ class DXManage():
 
         return app_name, job_inputs
 
-    def set_off_test_jobs(
-        self, job_inputs, app_name, folder_name
-    ) -> str:
+    def set_off_test_jobs(self, job_inputs, app_name) -> str:
         """
         Set off the job in the test project using inputs from
         the original job but with the updated config file instead
@@ -572,8 +538,6 @@ class DXManage():
             dictionary with the inputs to set off the job with
         app_name : str
             DX file ID of the MultiQC report in format project-id:file-id
-        folder_name: str
-            name of the DX folder in the test project to save outputs to
 
         Returns
         -------
@@ -588,7 +552,7 @@ class DXManage():
         job = dx.DXApp(name=app_name).run(
             app_input=job_inputs,
             project=self.args.test_project_id,
-            folder=folder_name
+            folder=self.args.folder_name
         )
 
         # Add tag to the job with the GitHub Actions run ID
@@ -647,12 +611,8 @@ def main():
     else:
         cnv_calling_job_id = None
 
-    # Set off test job with the updated config based on the prod job given
-    # for the relevant assay
-    folder_name = dx_manage.get_actions_folder()
     # Update the original inputs to set off our batch job
     app_name, job_inputs = dx_manage.update_inputs_to_batch_job(
-        folder_name=folder_name,
         updated_config_id=updated_config_id,
         multiqc_report=multiqc_report,
         cnv_job_id=cnv_calling_job_id
@@ -660,8 +620,7 @@ def main():
     # Launch the job
     job_id = dx_manage.set_off_test_jobs(
         job_inputs=job_inputs,
-        app_name=app_name,
-        folder_name=folder_name
+        app_name=app_name
     )
     dx_manage.write_out_job_id(job_id, args.out_file)
 
