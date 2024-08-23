@@ -57,13 +57,18 @@ class TestGetJobOutputDetails(unittest.TestCase):
             'input': {
                 'assay': 'TWE',
                 'artemis': True,
-                'single_output_dir': '/GitHub_Actions_run-123/output/TWE-date_time',
+                'single_output_dir': (
+                    '/GitHub_Actions_run-123/output/TWE-date_time'
+                ),
                 'snv_reports': True,
                 'qc_file': {'$dnanexus_link': 'file-123'},
                 'manifest_files': [{
                     '$dnanexus_link': 'file-234'
                 }],
-                'assay_config_dir': 'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/dias_batch_configs/',
+                'assay_config_dir': (
+                    'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/'
+                    'dias_batch_configs/'
+                ),
                 'split_tests': True,
                 'exclude_controls': True,
                 'unarchive': False,
@@ -144,7 +149,10 @@ class TestGetJobOutputDetails(unittest.TestCase):
             'manifest_files': [{
                 '$dnanexus_link': 'file-234'
             }],
-            'assay_config_dir': 'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/dias_batch_configs/',
+            'assay_config_dir': (
+                'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/'
+                'dias_batch_configs/'
+            ),
             'split_tests': True,
             'exclude_controls': True,
             'unarchive': False,
@@ -169,7 +177,6 @@ class TestGetJobOutputDetails(unittest.TestCase):
         assert launched_jobs == [
             'job-54321', 'job-67890', 'analysis-123'
         ], 'Launched jobs not returned correctly'
-
 
 
 class TestWaitOnDone(unittest.TestCase):

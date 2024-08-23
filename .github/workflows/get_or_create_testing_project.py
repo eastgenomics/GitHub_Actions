@@ -157,10 +157,10 @@ class DXManage():
         )
 
         if existing_projects:
-            existing_project_info = '\n\t'.join(
-                [f"{proj['id']}: {proj['describe']['name']}"
-                for proj in existing_projects]
-            )
+            existing_project_info = '\n\t'.join([
+                f"{proj['id']}: {proj['describe']['name']}"
+                for proj in existing_projects
+            ])
 
             assert len(existing_projects) == 1, (
                 "Found multiple existing 004 testing projects for the updated "

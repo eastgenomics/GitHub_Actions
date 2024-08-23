@@ -302,7 +302,7 @@ class TestFilterHighestBatchConfig(unittest.TestCase):
             {
                 'project': 'project-123',
                 'id': 'file-567',
-                'describe' : {
+                'describe': {
                     'archivalState': 'live',
                     'name': 'config3.json',
                 }
@@ -352,7 +352,7 @@ class TestFilterHighestBatchConfig(unittest.TestCase):
             {
                 'project': 'project-123',
                 'id': 'file-567',
-                'describe' : {
+                'describe': {
                     'archivalState': 'archival',
                     'name': 'config3.json',
                 }
@@ -360,7 +360,7 @@ class TestFilterHighestBatchConfig(unittest.TestCase):
             {
                 'project': 'project-123',
                 'id': 'file-678',
-                'describe' : {
+                'describe': {
                     'archivalState': 'unarchiving',
                     'name': 'config4.json',
                 }
@@ -394,6 +394,7 @@ class TestFilterHighestBatchConfig(unittest.TestCase):
         assert expected_warning in stdout, (
             "Warnings not printed for non-live config files"
         )
+
 
 class TestSaveConfigInfoToDict(unittest.TestCase):
     """

@@ -39,7 +39,10 @@ class TestFindDXProject(unittest.TestCase):
                 'public': False,
                 'describe': {
                     'id': 'project-Gpb3k6Q4PZYxVz9pzXvK82Xy',
-                    'name': '004_240731_GitHub_Actions_dias_TWE_config_GRCh37_v3.1.7_testing',
+                    'name': (
+                        '004_240731_GitHub_Actions_dias_TWE_config_GRCh37_'
+                        'v3.1.7_testing'
+                    ),
                     'created': 1722432666000,
                     'createdBy': {'user': 'user-locker'}
                 }
@@ -75,7 +78,10 @@ class TestFindDXProject(unittest.TestCase):
                 'public': False,
                 'describe': {
                     'id': 'project-Gpb3k6Q4PZYxVz9pzXvK82Xy',
-                    'name': '004_240731_GitHub_Actions_dias_TWE_config_GRCh37_v3.1.7_testing',
+                    'name': (
+                        '004_240731_GitHub_Actions_dias_TWE_config_GRCh37'
+                        '_v3.1.7_testing'
+                    ),
                     'created': 1722432666000,
                     'createdBy': {'user': 'user-locker'}
                 }
@@ -144,7 +150,10 @@ class TestGetOrCreateDXProject(unittest.TestCase):
                 'public': False,
                 'describe': {
                     'id': 'project-123',
-                    'name': '004_240731_GitHub_Actions_dias_TWE_config_GRCh37_v3.1.7_testing',
+                    'name': (
+                        '004_240731_GitHub_Actions_dias_TWE_config_GRCh37_'
+                        'v3.1.7_testing'
+                    ),
                     'created': 1722432666000,
                     'createdBy': {'user': 'user-locker'}
                 }
@@ -246,6 +255,7 @@ class TestGetOrCreateDXProject(unittest.TestCase):
                 send_email=False
             )
 
+
 class TestCreateDXFolder(unittest.TestCase):
     """
     Test function DXManage().create_dx_folder
@@ -272,7 +282,7 @@ class TestCreateDXFolder(unittest.TestCase):
         Test that folder name is returned when folder is created
         """
         project = 'project-123'
-        timestamp =  '240822_1006'
+        timestamp = '240822_1006'
 
         error_content = {
             "error": {
@@ -334,7 +344,7 @@ class TestCreateDXFolder(unittest.TestCase):
         Test that folder name is returned when folder already exists
         """
         project = 'project-123'
-        timestamp =  '240822_1006'
+        timestamp = '240822_1006'
         mock_list_folder.return_value = {
             'folders': ['/GitHub_Actions_run-12345_240822_1006']
         }
@@ -388,13 +398,21 @@ class TestWriteProjectIdToFile(unittest.TestCase):
             mock_file_handle = mock_open()
             # handle = mock_of_open
             # mock_of_open.write.assert_called_once()
-            expected_json_content = json.dumps(expected_content, ensure_ascii=False, separators=(',', ':'))
+            expected_json_content = json.dumps(
+                expected_content,
+                ensure_ascii=False,
+                separators=(',', ':')
+            )
 
             # Retrieve all calls to write
-            write_calls = [call[0] for call in mock_file_handle.write.call_args_list]
+            write_calls = [
+                call[0] for call in mock_file_handle.write.call_args_list
+            ]
 
             # Join all write calls into a single string
-            written_content = ''.join(arg for call in write_calls for arg in call)
+            written_content = ''.join(
+                arg for call in write_calls for arg in call
+            )
 
             # Remove whitespace from the JSON content for comparison
             written_content = ''.join(written_content.split())
