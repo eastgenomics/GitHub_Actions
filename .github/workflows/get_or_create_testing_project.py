@@ -109,7 +109,7 @@ class DXManage():
         -------
         existing_projects: list
             list containing info (in dict form) about existing project(s) if
-            found, else returns None
+            found
         Example:
         [
             {
@@ -156,19 +156,17 @@ class DXManage():
             )
         )
 
-        if not existing_projects:
-            return None
+        if existing_projects:
+            existing_project_info = '\n\t'.join(
+                [f"{proj['id']}: {proj['describe']['name']}"
+                for proj in existing_projects]
+            )
 
-        existing_project_info = '\n\t'.join(
-            [f"{proj['id']}: {proj['describe']['name']}"
-            for proj in existing_projects]
-        )
-
-        assert len(existing_projects) == 1, (
-            "Found multiple existing 004 testing projects for the updated "
-            f"config file: \n\t{existing_project_info}\n. Please either"
-            " rename or delete projects so a maximum of one remains"
-        )
+            assert len(existing_projects) == 1, (
+                "Found multiple existing 004 testing projects for the updated "
+                f"config file: \n\t{existing_project_info}\n. Please either"
+                " rename or delete projects so a maximum of one remains"
+            )
 
         return existing_projects
 
@@ -224,13 +222,13 @@ class DXManage():
                     dx.DXProject(dxid=project_id).invite(
                         user, access_level, send_email=False
                     )
-                    prettier_print(
+                    print(
                         f"\nGranted {access_level} privilege to {user}"
                     )
         else:
             project_id = existing_projects[0]['id']
             project_info = '\n\t'.join([
-                f"{x['describe']['name']} ({x['id']} - "
+                f"{x['describe']['name']} ({x['id']}) - "
                 f"created by {x['describe']['createdBy']['user']} on "
                 f"{datetime.fromtimestamp(x['describe']['created']/1000).strftime('%Y-%m-%d')}" for x in existing_projects
             ])
@@ -286,7 +284,7 @@ class DXManage():
                 }
             )
 
-            prettier_print(f'Created output folder: {folder_name}')
+            print(f'Created output folder: {folder_name}')
 
         return folder_name
 

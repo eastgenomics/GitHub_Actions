@@ -1,4 +1,3 @@
-import dxpy as dx
 import json
 import os
 import pytest
@@ -185,21 +184,16 @@ class TestFilterHighestBatchConfig(unittest.TestCase):
         self.dx_manage = DXManage(self.mock_args)
 
         self.loads_patch = mock.patch('get_production_config.json.load')
-        self.find_patch = mock.patch(
-            'get_production_config.dx.find_data_objects'
-        )
         self.file_patch = mock.patch('get_production_config.dx.DXFile')
         self.read_patch = mock.patch('get_production_config.dx.DXFile.read')
 
         # create mocks to reference
         self.mock_loads = self.loads_patch.start()
-        self.mock_find = self.find_patch.start()
         self.mock_file = self.file_patch.start()
         self.mock_read = self.read_patch.start()
 
     def tearDown(self):
         self.mock_loads.stop()
-        self.mock_find.stop()
         self.mock_file.stop()
         self.mock_read.stop()
 
