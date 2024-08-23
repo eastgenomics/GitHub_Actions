@@ -50,6 +50,14 @@ def parse_args() -> argparse.Namespace:
         )
     )
 
+    parser.add_argument(
+        '-r',
+        '--run_id',
+        required=True,
+        type=str,
+        help="ID of this GitHub Actions run to name the output DX folder"
+    )
+
     return parser.parse_args()
 
 
@@ -73,6 +81,18 @@ def prettier_print(thing) -> None:
     print(json.dumps(thing, indent='⠀⠀'))
 
 
+def time_stamp() -> str:
+    """
+    Returns string of date & time formatted as YYMMDD_HHMM
+
+    Returns
+    -------
+    str
+        String of current date and time as YYMMDD_HHMM
+    """
+    return datetime.now().strftime("%y%m%d_%H%M")
+
+
 class DXManage():
     """
     Methods for generic handling of dx related things
@@ -80,29 +100,43 @@ class DXManage():
     def __init__(self, args) -> None:
         self.args = args
 
-    @staticmethod
-    def find_dx_project(changed_config_name):
+    def find_dx_test_project(self):
         """
         Check if a 004 project already exists in DNAnexus which matches
         what the project should be called for the config file updated
-
-        Parameters
-        ----------
-        changed_config_name : str
-            name of the config file which has been updated
-            e.g. 'dias_TWE_config_GRCh37_v3.1.7'
 
         Returns
         -------
         existing_projects: list
             list containing info (in dict form) about existing project(s) if
             found, else returns None
+        Example:
+        [
+            {
+                'id': 'project-Gpb3k6Q4PZYxVz9pzXvK82Xy',
+                'level': 'ADMINISTER',
+                'permissionSources': ['user-locker'],
+                'public': False,
+                'describe': {
+                    'id': 'project-Gpb3k6Q4PZYxVz9pzXvK82Xy',
+                    'name': (
+                        '004_240731_GitHub_Actions_dias_TWE_config_GRCh37'
+                        '_v3.1.7_testing'
+                    ),
+                    'created': 1722432666000,
+                    'createdBy': {
+                        'user': 'user-locker'
+                    }
+                }
+            }
+        ]
 
         Raises
         ------
         AssertionError
             Raised when more than one 004 project found for given config name
         """
+        changed_config_name = self.args.input_config.replace('.json', '')
         # Find existing project(s) beginning with 004, with a date in %y%m%d
         # format and includes the name of the updated config file
         existing_projects = list(
@@ -138,29 +172,26 @@ class DXManage():
 
         return existing_projects
 
-    def get_or_create_dx_project(self, changed_config_name, actions_url):
+    def get_or_create_dx_project(self, existing_projects):
         """
         If a testing project for the updated config file exists, get the ID
         of that project. If one does not exist, make a new project for testing
 
         Parameters
         ----------
-        changed_config_name : str
-            name of the config file which has been updated
-            e.g. dias_TWE_config_GRCh37_v3.1.7
-        actions_url : str
-            URL of this GitHub Actions run to be included in the testing
-            project description
+        existing_projects : list
+            list containing info on any existing 004 test project for the
+            config file which has been updated
 
         Returns
         -------
         project_id: str
             ID of the testing project to use
         """
-        # Try and find any existing projects for the updated config
-        existing_projects = self.find_dx_project(changed_config_name)
+        # Remove .json from name of updated config file
+        changed_config_name = self.args.input_config.replace('.json', '')
 
-        # If none exist, create new project with today's date and name of
+        # If no 004 projs exist, create new proj with today's date + name of
         # the config file. This includes 'GitHub_Actions' in the name for now
         # but will be updated when the workflow is in production
         if not existing_projects:
@@ -177,7 +208,7 @@ class DXManage():
                 ),
                 description=(
                     "This project was created automatically by GitHub Actions"
-                    f": {actions_url}"
+                    f": {self.args.run_url}"
                 )
             )
             print(
@@ -212,21 +243,72 @@ class DXManage():
 
         return project_id
 
-    @staticmethod
-    def write_project_id_to_file(project_id, output_filename):
+    def create_dx_folder(self, test_project_id, timestamp):
         """
-        Write the project ID to a file for use in the next steps of the
-        workflow
+        Creates a DNAnexus folder for the GitHub Actions run if it does not
+        exist
 
         Parameters
         ----------
-        project_id : str
-            ID of the project to write to file
-        output_filename : str
-            the name of the txt file to write out with the test project ID in
+        test_project_id : str
+            ID of the DX project to create the folder in
+        timestamp : str
+            the datetime in format "%y%m%d_%H%M" e.g. 220131_1234
+
+        Returns
+        -------
+        folder_name : str
+            The name of the folder that has been created in the DX test
+            project
+
         """
-        with open(output_filename, 'w', encoding='utf8') as out_file:
-            out_file.write(project_id)
+        # Create name for the folder to put the job output in
+        folder_name = f"/GitHub_Actions_run-{self.args.run_id}_{timestamp}"
+
+        # Try and find a folder in the project which matches this name
+        try:
+            dx.api.project_list_folder(
+                object_id=test_project_id,
+                input_params={
+                    'folder': folder_name,
+                    'only': 'folders'
+                },
+                always_retry=True
+            )
+
+        except dx.exceptions.ResourceNotFound:
+            # Can't find folder -> create one
+            dx.api.project_new_folder(
+                object_id=test_project_id,
+                input_params={
+                    'folder': folder_name,
+                    'parents': True
+                }
+            )
+
+            prettier_print(f'Created output folder: {folder_name}')
+
+        return folder_name
+
+    def write_project_id_to_file(self, project_id, folder_name):
+        """
+        Write the project ID and folder name to a file for use in the next
+        steps of the workflow
+
+        Parameters
+        ----------
+        project_id: str
+            ID of the DX testing project which has been found/created
+        folder_name: str
+            name of the folder which has been created in the testing project
+        """
+        project_dict = {
+            'project_id': project_id,
+            'folder_name': folder_name
+
+        }
+        with open(self.args.output_filename, 'w', encoding='utf8') as out_file:
+            json.dump(project_dict, out_file)
 
 
 def main():
@@ -235,9 +317,19 @@ def main():
     """
     args = parse_args()
     dx_manage = DXManage(args)
-    config_name = args.input_config.replace('.json', '')
-    project_id = dx_manage.get_or_create_dx_project(config_name, args.run_url)
-    dx_manage.write_project_id_to_file(project_id, args.output_filename)
+
+    existing_test_project = dx_manage.find_dx_test_project()
+    project_004_id = dx_manage.get_or_create_dx_project(
+        existing_projects=existing_test_project
+    )
+    folder_created = dx_manage.create_dx_folder(
+        test_project_id=project_004_id,
+        timestamp=time_stamp()
+    )
+    dx_manage.write_project_id_to_file(
+        project_id=project_004_id,
+        folder_name=folder_created
+    )
 
 
 if __name__ == '__main__':

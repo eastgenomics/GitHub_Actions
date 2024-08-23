@@ -1,5 +1,16 @@
 name: Perform integration testing
-on: [pull_request]
+on:
+  pull_request:
+
+  workflow_call:
+    secrets:
+      DX_TOKEN:
+        description: 'DNAnexus token'
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   get_changed_json_files:
@@ -11,7 +22,8 @@ jobs:
       all_changed_files_count: ${{ steps.changed-files.outputs.all_changed_files_count }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout caller repository code
+        uses: actions/checkout@v4
 
       - name: Get changed JSON files
         id: changed-files
@@ -20,13 +32,14 @@ jobs:
           files: |
             **.json
 
-      - name: Write issue body
-        id: write-issue-body
+      - name: Write comment body
+        id: write-comment-body
         if: steps.changed-files.outputs.all_changed_files_count == '1'
         env:
           ACTIONS_RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          CHANGED_FILE: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          body="One config file was updated in this PR. Setting off automated testing: ${ACTIONS_RUN_URL}"
+          body="One config file (${CHANGED_FILE}) was updated in this PR. Setting off automated testing: ${ACTIONS_RUN_URL}"
           echo "body=$body" >> $GITHUB_OUTPUT
 
       - name: Create PR comment if one config changed
@@ -35,7 +48,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          body: ${{ steps.write-issue-body.outputs.body }}
+          body: ${{ steps.write-comment-body.outputs.body }}
           reactions: rocket
 
       - name: Create PR comment if no/multiple configs changed
@@ -46,7 +59,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
             Either no or multiple config files were updated in this PR. Skipping uploading and automated testing.
-          reactions: eyes
 
   upload_and_test:
     needs: get_changed_json_files
@@ -57,7 +69,15 @@ jobs:
     name: Upload and test changed files
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout caller repository code
+        uses: actions/checkout@v4
+
+      - name: Checkout reusable workflow repository into a subdirectory
+        uses: actions/checkout@v4
+        with:
+          repository: eastgenomics/GitHub_Actions
+          ref: IN-727_check_jobs
+          path: reusable-workflow
 
       - name: Set up Python 3.8
         uses: actions/setup-python@v1
@@ -67,7 +87,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f reusable-workflow/requirements.txt ]; then pip install -r reusable-workflow/requirements.txt; fi
           sudo apt-get install -y aha
 
       - name: Get or create a DNAnexus project for testing
@@ -77,24 +97,48 @@ jobs:
         run: |
           echo "${CHANGED_FILE} was changed in this PR"
           dx login --token ${{ secrets.DX_TOKEN }} --noprojects
-          python get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_id.txt -u ${ACTIONS_RUN_URL}
-          TEST_PROJ_ID=$(cat dx_project_id.txt)
+          python reusable-workflow/.github/workflows/get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_info.json -u ${ACTIONS_RUN_URL} -r ${{ github.run_id }}
+          TEST_PROJ_ID=$(jq -r .project_id dx_project_info.json)
+          FOLDER_NAME=$(jq -r .folder_name dx_project_info.json)
           echo "TEST_PROJ_ID=$TEST_PROJ_ID" >> $GITHUB_OUTPUT
+          echo "FOLDER_NAME=$FOLDER_NAME" >> $GITHUB_OUTPUT
 
       - name: Upload changed JSON config file to testing_project
         env:
           TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+          FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
         id: upload-config
         run: |
-          FILE_ID=$(dx upload ${CHANGED_FILE} --destination ${TEST_PROJ_ID}:/ --brief)
-          echo "Config file uploaded to DNAnexus. File ID: $FILE_ID"
+          FILE_ID=$(dx upload ${CHANGED_FILE} --destination ${TEST_PROJ_ID}:/${FOLDER_NAME}/ --brief)
+          echo "Config file uploaded to DNAnexus project ${TEST_PROJ_ID}. File ID: $FILE_ID"
           echo "FILE_ID=$FILE_ID" >> $GITHUB_OUTPUT
+
+      - name: Generate comment body for file upload
+        id: generate-upload-comment
+        env:
+          TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+          UPLOADED_FILE_ID: ${{ steps.upload-config.outputs.FILE_ID }}
+          FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
+        run: |
+          PREFIX="project-"
+          PROJ_ID=${TEST_PROJ_ID#"$PREFIX"}
+          DX_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/data/${FOLDER_NAME}/?id.values=${UPLOADED_FILE_ID}"
+          body="Updated configuration file ${CHANGED_FILE} uploaded to DNAnexus 004 test project: $DX_URL"
+          echo "body=$body" >> $GITHUB_OUTPUT
+
+      - name: Create PR comment with link to uploaded file
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.generate-upload-comment.outputs.body }}
+          reactions: hooray
 
       - name: Get production config in DNAnexus and output JSON with config info
         env:
           UPLOADED_FILE_ID: ${{ steps.upload-config.outputs.FILE_ID }}
         run: |
-          python get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ vars.CONFIG_PATH }}
+          python reusable-workflow/.github/workflows/get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ vars.CONFIG_PATH }}
 
       - name: Generate diff report compared to production config
         id: generate-diff
@@ -109,10 +153,28 @@ jobs:
 
           icdiff --unified=3 --line-numbers --cols=250 -H <(dx cat ${PROD_CONFIG_ID}) -L ${PROD_CONFIG_NAME} <(dx cat ${UPLOADED_FILE_ID}) -L ${UPDATED_CONFIG_NAME} | aha > config_diff.html
           echo "Diff report generated"
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload diff report
+        uses: actions/upload-artifact@v4
+        id: artifact-upload-step
         with:
           name: diff-report
           path: config_diff.html
+
+      - name: Create comment body for diff report
+        id: create-diff-comment-body
+        env:
+          ARTIFACT_URL: ${{ steps.artifact-upload-step.outputs.artifact-url }}
+        run: |
+          body="Diff report created which compares the updated config in this PR (${CHANGED_FILE}) to the current production config in 001_Reference: ${ARTIFACT_URL}"
+          echo "body=$body" >> $GITHUB_OUTPUT
+
+      - name: Create PR comment with URL to download diff report
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.create-diff-comment-body.outputs.body }}
 
       - name: Get current release version of Dias single workflow
         id: get-release
@@ -121,14 +183,69 @@ jobs:
           owner: eastgenomics
           repo: eggd_dias_single_workflow
 
+      - name: Copy test data to test project
+        id: copy-data-over
+        env:
+          ASSAY: ${{ steps.generate-diff.outputs.ASSAY }}
+          TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+          FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
+        run: |
+          PROD_JOB_ID=$(echo ${{ vars.PROD_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
+          echo "Copying test data from 002 project which was used for ${ASSAY} job set (${TEST_PROJ_ID}) over to 004 testing project ${TEST_PROJ_ID}"
+
+          python reusable-workflow/.github/workflows/copy_test_data.py -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -f ${FOLDER_NAME} -r ${{ github.run_id }}
+          echo "PROD_JOB_ID=$PROD_JOB_ID" >> $GITHUB_OUTPUT
+
       - name: Run tests in DNAnexus
+        id: run-testing-jobs
         env:
           TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+          PROD_JOB_ID: ${{ steps.copy-data-over.outputs.PROD_JOB_ID }}
           RELEASE_VERSION: ${{ steps.get-release.outputs.release }}
           ASSAY: ${{ steps.generate-diff.outputs.ASSAY }}
+          FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
         run: |
           echo "Current release version of eggd_dias_single_workflow GitHub repository is ${RELEASE_VERSION}"
-          TEST_JOB_ID=$(echo ${{ vars.TEST_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
-          echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${TEST_JOB_ID}"
+          echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${PROD_JOB_ID}"
 
-          python run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -j ${TEST_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -r ${{ github.run_id }}
+          if [ ${{ vars.RUN_CNV_CALLING }} == "True" ];
+          then
+            EXTRA_ARG="--run_cnv_calling"
+          else
+            EXTRA_ARG=""
+          fi
+
+          python reusable-workflow/.github/workflows/run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -a ${ASSAY} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -i ${{ github.run_id }} -f ${FOLDER_NAME} -o job_id.txt ${EXTRA_ARG}
+
+          JOB_ID=$(cat job_id.txt)
+          echo "JOB_ID=$JOB_ID" >> $GITHUB_OUTPUT
+
+      - name: Create comment body for job in DNAnexus
+        id: create-job-comment-body
+        env:
+          TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
+          JOB_ID: ${{ steps.run-testing-jobs.outputs.JOB_ID }}
+        run: |
+          PREFIX="project-"
+          PROJ_ID=${TEST_PROJ_ID#"$PREFIX"}
+          JOB_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/monitor/job/${JOB_ID}"
+          body="Test job(s) set off in DNAnexus: $JOB_URL"
+          echo "body=$body" >> $GITHUB_OUTPUT
+
+      - name: Create PR comment with link to test job
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.create-job-comment-body.outputs.body }}
+
+      - name: Check jobs complete successfully
+        id: check-job-status
+        env:
+            JOB_ID: ${{ steps.run-testing-jobs.outputs.JOB_ID }}
+        run: |
+          python reusable-workflow/.github/workflows/check_jobs_complete.py -i ${JOB_ID} -o job_command_info.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: job-info
+          path: job_command_info.txt

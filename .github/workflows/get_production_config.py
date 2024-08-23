@@ -92,17 +92,9 @@ class DXManage():
     def __init__(self, args) -> None:
         self.args = args
 
-    @staticmethod
-    def read_in_json(config_file, file_id):
+    def read_in_config(self):
         """
         Read in JSON file to a dict
-
-        Parameters
-        ----------
-        config_file : str
-            name of JSON file to read in
-        file_id : str
-            DNAnexus ID of the uploaded config file
 
         Returns
         -------
@@ -116,23 +108,24 @@ class DXManage():
         AssertionError
             Raised when there is no assay field in the updated config
         """
-        if not config_file.endswith('.json'):
+        if not self.args.input_config.endswith('.json'):
             raise RuntimeError(
                 'Error: invalid config file given - not a JSON file'
             )
 
-        with open(config_file, 'r', encoding='utf8') as json_file:
+        with open(self.args.input_config, 'r', encoding='utf8') as json_file:
             config_contents = json.load(json_file)
 
         # Add in keys for the file name and DX file ID to make diffing easier
         # later
-        config_contents['name'] = config_file
-        config_contents['dxid'] = file_id
+        config_contents['name'] = self.args.input_config
+        config_contents['dxid'] = self.args.file_id
 
         # Get the assay field from the config
         assay = config_contents.get('assay')
         assert assay, (
-            f"The updated config {config_file} does not have assay field"
+            f"The updated config {self.args.input_config} does not have "
+            "assay field"
         )
 
         return config_contents, assay
@@ -190,16 +183,13 @@ class DXManage():
 
         return config_files
 
-    @staticmethod
-    def filter_highest_batch_config(config_path, config_files, assay):
+    def filter_highest_batch_config(self, config_files, assay):
         """
         Get the highest version of the prod dias batch config for the
         relevant assay
 
         Parameters
         ----------
-        config_path : str
-            path to prod config files in DNAnexus (<project_id>:/path format)
         config_files : list
             list of dicts, each with info about a JSON config file found in
             the DX path
@@ -233,7 +223,7 @@ class DXManage():
                 )
                 continue
 
-                # Read in to dict
+            # Read in to dict
             config_data = json.loads(
                 dx.DXFile(
                     project=file['project'],
@@ -257,7 +247,7 @@ class DXManage():
                 highest_config = config_data
 
         assert highest_config, (
-            f"No config file was found for {assay} in {config_path}"
+            f"No config file was found for {assay} in {self.args.config_path}"
         )
 
         if len(config_version_files[highest_config['version']]) > 1:
@@ -317,7 +307,7 @@ class DXManage():
 
         return config_matching_info
 
-    def write_out_config_info(self, changed_config_to_prod, file_name):
+    def write_out_config_info(self, changed_config_to_prod):
         """
         Write out the updated vs prod config dictionary to a JSON file
 
@@ -329,7 +319,7 @@ class DXManage():
         file_name: str
             name of JSON file to write out
         """
-        with open(file_name, 'w', encoding='utf8') as json_file:
+        with open(self.args.output_file, 'w', encoding='utf8') as json_file:
             json.dump(changed_config_to_prod, json_file, indent=4)
 
 
@@ -340,13 +330,9 @@ def main():
     args = parse_args()
     dx_manage = DXManage(args)
 
-    changed_config_contents, assay = dx_manage.read_in_json(
-        args.input_config,
-        args.file_id
-    )
+    changed_config_contents, assay = dx_manage.read_in_config()
     config_files = dx_manage.get_json_configs_in_DNAnexus(args.config_path)
     prod_config = dx_manage.filter_highest_batch_config(
-        args.config_path,
         config_files,
         assay
     )
@@ -355,10 +341,7 @@ def main():
         changed_config_contents,
         prod_config
     )
-    dx_manage.write_out_config_info(
-        changed_and_prod_config_info,
-        args.output_file
-    )
+    dx_manage.write_out_config_info(changed_and_prod_config_info)
 
 if __name__ == '__main__':
     main()
