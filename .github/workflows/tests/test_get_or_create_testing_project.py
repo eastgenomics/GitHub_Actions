@@ -13,7 +13,35 @@ sys.path.append(os.path.abspath(
     os.path.join(os.path.realpath(__file__), '../../')
 ))
 
-from get_or_create_testing_project import DXManage
+from get_or_create_testing_project import DXManage, time_stamp
+
+
+class TestTimeStamp(unittest.TestCase):
+    """
+    Test function time_stamp() which takes the current time and returns
+    a formatted string
+    """
+    @patch('get_or_create_testing_project.datetime')
+    def test_time_stamp(self, mock_datetime):
+        """
+        Test that timestamp returned in correct format when mocking
+        the current time
+        """
+        # Set up the mock to return a fixed datetime
+        fixed_datetime = datetime(
+            2024, 8, 23, 14, 30
+        )
+        mock_datetime.now.return_value = fixed_datetime
+
+        # Call the function
+        result = time_stamp()
+
+        # Expected result based on the fixed datetime
+        expected_result = "240823_1430"
+
+        assert result == expected_result, (
+            'Timestamp not returned as expected'
+        )
 
 
 class TestFindDXProject(unittest.TestCase):

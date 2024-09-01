@@ -188,7 +188,8 @@ class DXManage():
 
         return existing_copied_files
 
-    def find_data_in_original_path(self, project_id, folder_name):
+    @staticmethod
+    def find_data_in_original_path(project_id, folder_name):
         """
         Find all files in a path in a project. This is used to find all
         files in the Dias single folder in the 002 project, and return the
@@ -205,6 +206,11 @@ class DXManage():
         -------
         original_data : list
             list of files (each as a dict) found in the path in the project
+
+        Raises
+        ------
+        AssertionError
+            When no files are found in the original path
         Example:
         [
             {
@@ -242,6 +248,12 @@ class DXManage():
                 }
             }
         ))
+
+        assert original_data, (
+            "No files were found in the original Dias single path "
+            f"{folder_name} in the 002 project {project_id}. "
+            f"Check if these have been moved/deleted"
+        )
 
         return original_data
 

@@ -198,6 +198,11 @@ class DXManage():
             job for job in launched_list if job.startswith('job-')
         ]
 
+        assert launched_jobs, (
+            "Error: No jobs were launched by eggd_dias_batch job "
+            f"{self.args.assay_job_id} given"
+        )
+
         # Get any jobs with GATKgCNV in the name
         cnv_calling_jobs = [
             job for job in launched_jobs
@@ -276,6 +281,7 @@ class DXManage():
                     'state': 'terminated'
                 }
             }
+        ]
         """
         executions = list(dx.find_executions(
             project=self.args.test_project_id,
@@ -425,7 +431,8 @@ class DXManage():
 
         return executable_str
 
-    def find_multiqc_report_in_proj(self, project_id):
+    @staticmethod
+    def find_multiqc_report_in_proj(project_id):
         """
         Find the file ID of the MultiQC report to use as an input for the
         eggd_dias_batch test job we set off, otherwise the eggd_artemis job
