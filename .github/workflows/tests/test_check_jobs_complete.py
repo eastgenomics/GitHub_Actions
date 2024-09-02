@@ -1,15 +1,9 @@
-import argparse
 import dxpy as dx
-import os
 import pytest
 import sys
 import unittest
 from unittest import mock
 from unittest.mock import patch, MagicMock
-
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.realpath(__file__), '../../')
-))
 
 from check_jobs_complete import DXManage, parse_args
 
@@ -20,21 +14,15 @@ class TestGetJobOutputDetails(unittest.TestCase):
     which are launched by the job set off by the workflow (eggd_dias_batch)
     complete successfully
     """
-    @classmethod
-    def setUpClass(cls):
-        sys.argv = [
-            'check_jobs_complete.py',
-            '-i', 'job-123',
-            '-o', 'job_command_info.txt'
-        ]
-        args = parse_args()
-
-        cls.dx_manage = DXManage(args)
-
     def setUp(self):
         """
         Set up test class-wide patches
         """
+        self.mock_args = MagicMock()
+        self.mock_args.job_id = 'job-123'
+        self.mock_args.outfile_name = 'job_command_info.txt'
+        self.dx_manage = DXManage(self.mock_args)
+
         # set up patches for each function call
         self.job_patch = mock.patch('check_jobs_complete.dx.DXJob')
         self.wait_patch = mock.patch(

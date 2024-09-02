@@ -1,17 +1,11 @@
 import dxpy as dx
 import json
-import os
 import pytest
-import sys
 import unittest
 
 from datetime import datetime
 from unittest import mock
 from unittest.mock import patch, mock_open, MagicMock
-
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.realpath(__file__), '../../')
-))
 
 from get_or_create_testing_project import DXManage, time_stamp
 
@@ -392,6 +386,10 @@ class TestCreateDXFolder(unittest.TestCase):
 
 
 class TestWriteProjectIdToFile(unittest.TestCase):
+    """
+    Tests for DXManage().write_project_id_to_file() which writes the
+    ID of the project created/found to file
+    """
     def setUp(self):
         # Create a mock object for self.args and set output_filename
         self.mock_args = MagicMock()

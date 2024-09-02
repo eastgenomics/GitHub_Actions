@@ -1,18 +1,11 @@
-import concurrent
 import dxpy as dx
 import json
-import os
 import pytest
 import re
-import sys
 import unittest
 
 from unittest import mock
 from unittest.mock import patch, mock_open, MagicMock
-
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.realpath(__file__), '../../')
-))
 
 from run_testing_jobs import DXManage
 
@@ -903,37 +896,64 @@ class TestTerminate(unittest.TestCase):
         self.mock_args = MagicMock()
         self.dx_manage = DXManage(self.mock_args)
 
-        self.job_patch = mock.patch('run_testing_jobs.dx.DXJob')
-        self.job_terminate_patch = mock.patch(
-            'run_testing_jobs.dx.DXJob.terminate'
-        )
-        self.analysis_patch = mock.patch('run_testing_jobs.dx.DXAnalysis')
-        self.analysis_terminate_patch = mock.patch(
-            'run_testing_jobs.dx.DXAnalysis.terminate'
-        )
+    @pytest.fixture(autouse=True)
+    def capsys(self, capsys):
+        """Capture stdout to provide it to tests"""
+        self.capsys = capsys
 
-        self.mock_job = self.job_patch.start()
-        self.mock_job_terminate = self.job_terminate_patch.start()
-        self.mock_analysis = self.analysis_patch.start()
-        self.mock_analysis_terminate = self.analysis_terminate_patch.start()
-
-    def tearDown(self):
-        self.mock_job.stop()
-        self.mock_job_terminate.stop()
-        self.mock_analysis.stop()
-        self.mock_analysis_terminate.stop()
-
-    def test_jobs_terminate(self):
+    @patch('run_testing_jobs.dx.DXJob')
+    def test_jobs_terminate(self, mock_dxjob):
         """
         Test when jobs provided they get terminate() called
         """
         # patch job object on which terminate() will get called
-        self.mock_job.return_value = dx.DXJob(dxid='localjob-')
+        mock_dxjob_instance = MagicMock()
+        mock_dxjob.return_value = mock_dxjob_instance
 
         self.dx_manage.terminate(['job-xxx', 'job-yyy'])
 
-        self.mock_job_terminate.assert_called()
+        mock_dxjob.assert_any_call(dxid='job-xxx')
+        mock_dxjob.assert_any_call(dxid='job-yyy')
+        self.assertEqual(mock_dxjob_instance.terminate.call_count, 2)
 
+    @patch('run_testing_jobs.dx.DXAnalysis')
+    def test_analyses_terminate(self, mock_dxanalysis):
+        """
+        Test when analyses provided they get terminate() called
+        """
+        # patch analysis object on which terminate() will get called
+        mock_dxanalysis_instance = MagicMock()
+        mock_dxanalysis.return_value = mock_dxanalysis_instance
+
+        self.dx_manage.terminate(['analysis-xxx', 'analysis-yyy'])
+
+        mock_dxanalysis.assert_any_call(dxid='analysis-xxx')
+        mock_dxanalysis.assert_any_call(dxid='analysis-yyy')
+        self.assertEqual(mock_dxanalysis_instance.terminate.call_count, 2)
+
+    @patch('run_testing_jobs.dx.DXJob')
+    def test_terminate_with_exception(self, mock_dxjob):
+        """
+        Test exception raised if terminate call fails
+        """
+        mock_dxjob_instance = MagicMock()
+        mock_dxjob.return_value = mock_dxjob_instance
+
+        # Add exceptions as side effects
+        mock_dxjob_instance.terminate.side_effect = (
+            Exception('termination failed')
+        )
+
+        # Run
+        self.dx_manage.terminate(['job-123'])
+
+        mock_dxjob.assert_called_once_with(dxid='job-123')
+
+        stdout = self.capsys.readouterr().out
+
+        assert 'Error terminating job job-123: termination failed' in stdout, (
+            'Error in terminating job not correctly caught'
+        )
 
 class TestSetOffTestJobs(unittest.TestCase):
     """
@@ -1016,3 +1036,31 @@ class TestSetOffTestJobs(unittest.TestCase):
             tags=['GitHub Actions run ID: 1234']
         )
 
+
+class TestWriteOutJobId(unittest.TestCase):
+    """
+    Tests for DXManage().write_out_job_id() function which writes out
+    the job which has been launched to a file
+    """
+    def setUp(self):
+        self.mock_args = MagicMock()
+        self.dx_manage = DXManage(self.mock_args)
+
+    @patch('run_testing_jobs.open', new_callable=mock_open)
+    def test_writing_out_job_id(self, mock_open_function):
+        """
+        Test job ID is written out correctly
+        """
+        job_id = 'job-1234'
+        outfile_name = 'job_id.txt'
+
+        self.dx_manage.write_out_job_id(job_id, outfile_name)
+
+        with self.subTest('Assert file opened correctly'):
+            mock_open_function.assert_called_once_with(
+                'job_id.txt', 'w', encoding='utf8'
+            )
+
+        with self.subTest('Assert job ID written out correctly'):
+            file_handle = mock_open_function()
+            file_handle.write.assert_called_once_with('job-1234')

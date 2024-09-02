@@ -1,17 +1,11 @@
 import concurrent
 import dxpy as dx
-import os
 import pytest
 import re
-import sys
 import unittest
 
 from unittest import mock
 from unittest.mock import patch, MagicMock
-
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.realpath(__file__), '../../')
-))
 
 from copy_test_data import DXManage
 
