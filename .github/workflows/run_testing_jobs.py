@@ -398,12 +398,16 @@ class DXManage():
             }
         ))
 
+        assert dias_single_analyses, (
+            f"Error: No Dias single job was found in the project {project_id}"
+            " given"
+        )
         # Get the unique versions of dias single used to generate all data
         # in the project
-        executable_versions = list(set([
+        executable_versions = sorted(list(set([
             analysis['describe']['executableName'].replace('dias_single_', '')
             for analysis in dias_single_analyses
-        ]))
+        ])))
 
         executable_info = '\n\t'.join(
             [version for version in executable_versions]

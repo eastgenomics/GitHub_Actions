@@ -1,3 +1,4 @@
+import concurrent
 import dxpy as dx
 import json
 import os
@@ -6,6 +7,7 @@ import re
 import sys
 import unittest
 
+from unittest import mock
 from unittest.mock import patch, mock_open, MagicMock
 
 sys.path.append(os.path.abspath(
@@ -562,3 +564,455 @@ class TestFindMultiqcReportInProj(unittest.TestCase):
 
         with pytest.raises(AssertionError, match=expected_error):
             self.dx_manage.find_multiqc_report_in_proj('project-1234')
+
+
+class TestCheckDiasSingleVersion(unittest.TestCase):
+    """
+    Tests for DXManage().check_dias_single_version() function which checks
+    the version of Dias single which was used to generate data in the
+    002 project which relates to the production eggd_dias_batch job given
+    """
+    def setUp(self):
+        # Set up a default mock args object
+        self.mock_args = MagicMock()
+        self.mock_args.repo_version = 'v2.5.0'
+        self.dx_manage = DXManage(self.mock_args)
+
+    @pytest.fixture(autouse=True)
+    def capsys(self, capsys):
+        """
+        Capture stdout to provide it to tests
+        """
+        self.capsys = capsys
+
+    @patch('run_testing_jobs.dx.find_analyses')
+    def test_dias_single_version_returned_correctly(self, mock_find):
+        """
+        Test Dias single version is returned correctly
+        """
+        # Mock find response
+        mock_find.return_value = [
+            {
+                'id': 'analysis-123',
+                'describe': {
+                    'id': 'analysis-123',
+                    'executableName': 'dias_single_v2.5.0'
+                }
+            }
+        ]
+
+        dias_single_version = (
+            self.dx_manage.check_dias_single_version_which_generated_data(
+                'project-123'
+            )
+        )
+
+        assert dias_single_version == 'v2.5.0', (
+            "Dias single version not returned correctly"
+        )
+
+    @patch('run_testing_jobs.dx.find_analyses')
+    def test_error_raised_when_multiple_dias_single_versions_found(
+        self, mock_find
+    ):
+        """
+        Test error is raised if multiple Dias single versions found
+        """
+        mock_find.return_value = [
+            {
+                'id': 'analysis-123',
+                'describe': {
+                    'id': 'analysis-123',
+                    'executableName': 'dias_single_v2.5.0'
+                }
+            },
+            {
+                'id': 'analysis-456',
+                'describe': {
+                    'id': 'analysis-456',
+                    'executableName': 'dias_single_v2.6.0'
+                }
+            }
+        ]
+
+        expected_error = (
+            "Error: 2 versions of the dias "
+            "single workflow were used to generate data in this project:"
+            "\nv2.5.0\n\tv2.6.0\n. This is not expected - please change the"
+            " job for this assay in the repository's GA variables"
+        )
+
+        with pytest.raises(AssertionError, match=expected_error):
+            self.dx_manage.check_dias_single_version_which_generated_data(
+                'project-123'
+            )
+
+    @patch('run_testing_jobs.dx.find_analyses')
+    def test_error_raised_when_no_dias_single_version_found(self, mock_find):
+        """
+        Test error is raised if no Dias single version found
+        """
+        mock_find.return_value = []
+
+        expected_error = (
+            "Error: No Dias single job was found in the project project-123"
+            " given"
+        )
+
+        with pytest.raises(AssertionError, match=expected_error):
+            self.dx_manage.check_dias_single_version_which_generated_data(
+                'project-123'
+            )
+
+    @patch('run_testing_jobs.dx.find_analyses')
+    def test_error_raised_when_version_does_not_match_github_repo(
+        self, mock_find
+    ):
+        """
+        Test error is raised if no Dias single version found
+        """
+        self.dx_manage.args.repo_version = 'v2.6.0'
+
+        mock_find.return_value = [
+            {
+                'id': 'analysis-123',
+                'describe': {
+                    'id': 'analysis-123',
+                    'executableName': 'dias_single_v2.5.0'
+                }
+            }
+        ]
+
+        expected_warning = (
+            "Warning: The version of Dias single used to generate data in "
+            "this project (v2.5.0) does not match the current "
+            "release version for the Dias single GitHub repo "
+            "(v2.6.0). \nPlease check that this is "
+            "expected and if not, update the job ID given for this assay"
+            " within the repository's GitHub Actions variables"
+        )
+
+        dias_single_version = (
+            self.dx_manage.check_dias_single_version_which_generated_data(
+                'project-123'
+            )
+        )
+
+        stdout = self.capsys.readouterr().out
+
+        assert expected_warning in stdout, (
+            "Warning about Dias single version not printed as expected"
+        )
+
+
+class TestUpdateInputsToBatchJob(unittest.TestCase):
+    """
+    Test DXManage().update_inputs_to_batch_job() function which takes the
+    original input from an eggd_dias_batch job and updates them according
+    to the eggd_dias_batch config we are updating and what we want to re-run
+    """
+    def setUp(self):
+        # Set up a default mock args object
+        self.mock_args = MagicMock()
+        self.mock_args.folder_name = '/GitHub_Actions_run-123_240822_1006'
+        self.mock_args.test_sample_limit = 1
+        self.dx_manage = DXManage(self.mock_args)
+
+    @patch('run_testing_jobs.dx.describe')
+    def test_inputs_updated_correctly_if_cnv_job_id(self, mock_describe):
+        """
+        Test inputs are updated correctly if a CNV job ID is given as an input
+        """
+        # Mock describe response with inputs from CEN eggd_dias_batch job
+        mock_describe.return_value = {
+            'executableName': 'eggd_dias_batch',
+            'input': {
+                'assay': 'CEN',
+                'single_output_dir': '/output/CEN-240801_1018',
+                'cnv_call': True,
+                'snv_reports': True,
+                'cnv_reports': True,
+                'artemis': True,
+                'qc_file': {
+                    '$dnanexus_link': 'file-XXX'
+                },
+                'manifest_files': [
+                    {'$dnanexus_link': 'file-ABC'}
+                ],
+                'assay_config_dir': (
+                    'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/'
+                    'dias_batch_configs/'
+                ),
+                'split_tests': True,
+                'exclude_controls': True,
+                'exclude_samples': '123456-123R0123',
+                'unarchive': False,
+                'unarchive_only': False
+            }
+        }
+
+        updated_config_id = 'file-892'
+        multiqc_report = 'project-123:file-789'
+        cnv_job_id = 'job-123'
+
+        # Call function
+        app_name, updated_inputs = self.dx_manage.update_inputs_to_batch_job(
+            updated_config_id, multiqc_report, cnv_job_id
+        )
+
+        with self.subTest('App name returned correctly'):
+            assert app_name == 'eggd_dias_batch', (
+                "App name not returned correctly"
+            )
+
+        with self.subTest('Inputs updated correctly'):
+            expected_new_inputs = {
+                'assay': 'CEN',
+                'single_output_dir': (
+                    '/GitHub_Actions_run-123_240822_1006/output/'
+                    'CEN-240801_1018'
+                ),
+                'cnv_call': False,
+                'cnv_call_job_id': 'job-123',
+                'snv_reports': True,
+                'cnv_reports': True,
+                'artemis': True,
+                'assay_config_file': {
+                    '$dnanexus_link': 'file-892'
+                },
+                'qc_file': {
+                    '$dnanexus_link': 'file-XXX'
+                },
+                'multiqc_report': {
+                    '$dnanexus_link': 'file-789'
+                },
+                'manifest_files': [
+                    {'$dnanexus_link': 'file-ABC'}
+                ],
+                'assay_config_dir': (
+                    'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/'
+                    'dias_batch_configs/'
+                ),
+                'split_tests': True,
+                'exclude_controls': True,
+                'exclude_samples': '123456-123R0123',
+                'unarchive': False,
+                'unarchive_only': False,
+                'sample_limit': 1
+            }
+
+            assert updated_inputs == expected_new_inputs, (
+                "eggd_dias_batch inputs not updated correctly"
+            )
+
+    @patch('run_testing_jobs.dx.describe')
+    def test_inputs_updated_correctly_if_no_cnv_job_id(self, mock_describe):
+        """
+        Test inputs updated correctly if no CNV job ID is given as an input
+        """
+                # Mock describe response with mimimal inputs
+        mock_describe.return_value = {
+            'executableName': 'eggd_dias_batch',
+            'input': {
+                'assay': 'TWE',
+                'artemis': True,
+                'single_output_dir': '/output/TWE-240426_1508',
+                'snv_reports': True,
+                'qc_file': {
+                    '$dnanexus_link': 'file-XYZ'
+                },
+                'manifest_files': [
+                    {'$dnanexus_link': 'file-ABC'}
+                ],
+                'assay_config_file': {
+                    '$dnanexus_link': 'file-123'
+                },
+                'assay_config_dir': (
+                    'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/'
+                    'dias_batch_configs/'
+                ),
+                'split_tests': True,
+                'exclude_controls': True,
+                'unarchive': False,
+                'unarchive_only': False
+            }
+        }
+
+        updated_config_id = 'file-892'
+        multiqc_report = 'project-123:file-789'
+        cnv_job_id = None
+
+        # Call function
+        app_name, updated_inputs = self.dx_manage.update_inputs_to_batch_job(
+            updated_config_id, multiqc_report, cnv_job_id
+        )
+
+        with self.subTest('App name returned correctly'):
+            assert app_name == 'eggd_dias_batch', (
+                "App name not returned correctly"
+            )
+
+        with self.subTest('Inputs updated correctly'):
+            expected_new_inputs = {
+                'assay': 'TWE',
+                'artemis': True,
+                'snv_reports': True,
+                'single_output_dir': (
+                    '/GitHub_Actions_run-123_240822_1006/output/'
+                    'TWE-240426_1508'
+                ),
+                'qc_file': {
+                    '$dnanexus_link': 'file-XYZ'
+                },
+                'manifest_files': [
+                    {'$dnanexus_link': 'file-ABC'}
+                ],
+                'assay_config_file': {
+                    '$dnanexus_link': 'file-892'
+                },
+                'multiqc_report': {
+                    '$dnanexus_link': 'file-789'
+                },
+                'sample_limit': 1,
+                'assay_config_dir': (
+                    'project-Fkb6Gkj433GVVvj73J7x8KbV:/dynamic_files/'
+                    'dias_batch_configs/'
+                ),
+                'split_tests': True,
+                'exclude_controls': True,
+                'unarchive': False,
+                'unarchive_only': False
+            }
+
+            assert updated_inputs == expected_new_inputs, (
+                "eggd_dias_batch inputs not updated correctly when no CNV "
+                "calling job ID given so CNV calling should be re-run"
+            )
+
+
+class TestTerminate(unittest.TestCase):
+    """
+    Tests for DXManage().terminate() function which takes a list of job or
+    analysis IDs and calls terminate on them in parallel
+    """
+    def setUp(self):
+        """
+        Set up mocks of terminate
+        """
+        # Set up a default mock args object
+        self.mock_args = MagicMock()
+        self.dx_manage = DXManage(self.mock_args)
+
+        self.job_patch = mock.patch('run_testing_jobs.dx.DXJob')
+        self.job_terminate_patch = mock.patch(
+            'run_testing_jobs.dx.DXJob.terminate'
+        )
+        self.analysis_patch = mock.patch('run_testing_jobs.dx.DXAnalysis')
+        self.analysis_terminate_patch = mock.patch(
+            'run_testing_jobs.dx.DXAnalysis.terminate'
+        )
+
+        self.mock_job = self.job_patch.start()
+        self.mock_job_terminate = self.job_terminate_patch.start()
+        self.mock_analysis = self.analysis_patch.start()
+        self.mock_analysis_terminate = self.analysis_terminate_patch.start()
+
+    def tearDown(self):
+        self.mock_job.stop()
+        self.mock_job_terminate.stop()
+        self.mock_analysis.stop()
+        self.mock_analysis_terminate.stop()
+
+    def test_jobs_terminate(self):
+        """
+        Test when jobs provided they get terminate() called
+        """
+        # patch job object on which terminate() will get called
+        self.mock_job.return_value = dx.DXJob(dxid='localjob-')
+
+        self.dx_manage.terminate(['job-xxx', 'job-yyy'])
+
+        self.mock_job_terminate.assert_called()
+
+
+class TestSetOffTestJobs(unittest.TestCase):
+    """
+    Tests for DXManage().set_off_test_jobs() function which sets off a
+    DNAnexus eggd_dias_batch job with our inputs
+    """
+    def setUp(self):
+        # Set up a default mock args object
+        self.mock_args = MagicMock()
+        self.mock_args.folder_name = '/GitHub_Actions_run-123_240822_1006'
+        self.mock_args.test_project_id = 'project-234'
+        self.mock_args.run_id = 1234
+        self.dx_manage = DXManage(self.mock_args)
+
+    @patch('run_testing_jobs.dx.DXJob')
+    @patch('run_testing_jobs.dx.DXApp')
+    def test_set_off_job_correctly(self, mock_app, mock_job):
+        """
+        Test that eggd_dias_batch job is set off with correct inputs
+        """
+        # Mock the job and app
+        mock_job_instance = MagicMock()
+        mock_app_instance = MagicMock()
+        mock_app_instance.run.return_value = mock_job_instance
+
+        mock_app.return_value = mock_app_instance
+        mock_job_instance.describe.return_value = {'id': 'job-456'}
+        mock_job.return_value = mock_job_instance
+
+        app_name = 'eggd_dias_batch'
+        job_inputs = {
+            'assay': 'TWE',
+            'artemis': True,
+            'single_output_dir': (
+                '/GitHub_Actions_run-123_240822_1006/output/'
+                'TWE-240426_1508'
+            ),
+            'snv_reports': True,
+            'qc_file': {
+                '$dnanexus_link': 'file-XXX'
+            },
+            'manifest_files': [
+                {'$dnanexus_link': 'file-ABC'}
+            ],
+            'assay_config_file': {
+                '$dnanexus_link': 'file-892'
+            },
+            'split_tests': True,
+            'exclude_controls': True,
+            'unarchive': False,
+            'unarchive_only': False,
+            'multiqc_report': {
+                '$dnanexus_link': 'file-789'
+            },
+            'sample_limit': 1
+        }
+
+        # Call the function
+        self.dx_manage.set_off_test_jobs(
+            job_inputs, app_name
+        )
+
+        with self.subTest('Mock app instance created correctly'):
+            mock_app.assert_called_once_with(name='eggd_dias_batch')
+
+        with self.subTest('Mock app run with correct inputs'):
+            mock_app.return_value.run.assert_called_once_with(
+                app_input=job_inputs,
+                project='project-234',
+                folder='/GitHub_Actions_run-123_240822_1006'
+            )
+
+        with self.subTest('Job describe called correctly'):
+            mock_job.assert_called_once_with(
+                dxid='job-456'
+            )
+
+        with self.subTest('Job tagging called correctly'):
+            mock_job.return_value.add_tags.assert_called_once_with(
+            tags=['GitHub Actions run ID: 1234']
+        )
+
