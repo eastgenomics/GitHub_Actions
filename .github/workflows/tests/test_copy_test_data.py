@@ -10,6 +10,58 @@ from unittest.mock import patch, MagicMock
 from copy_test_data import DXManage
 
 
+@patch(
+    'copy_test_data.concurrent.futures.ThreadPoolExecutor.submit',
+    wraps=concurrent.futures.ThreadPoolExecutor().submit
+)
+@patch('copy_test_data.DXManage.move_one_file')
+class TestCallInParallel(unittest.TestCase):
+    """
+    Test function DXManage().call_in_parallel which takes a function
+    and inputs and calls the function in parallel
+    """
+    def setUp(self):
+        # Set up a default mock args object
+        self.mock_args = MagicMock()
+        self.dx_manage = DXManage(self.mock_args)
+
+    def test_call_in_parallel(self, mock_move, mock_submit):
+        """
+        Test function called in parallel
+        """
+        self.dx_manage.call_in_parallel(
+            mock_move,
+            items=[('file-xx', 'folder-1'), ('file-yy', 'folder-2')]
+        )
+
+        assert mock_submit.call_count == 2, (
+            'Function not called correct number of times for '
+            'concurrent moving'
+        )
+
+    def test_exceptions_caught_and_raised(self, mock_move, mock_submit):
+        """
+        Test that if one of the moves raises an Exception that this
+        is caught and raised
+        """
+        # raise error one out of 4 of the _find calls
+        mock_move.side_effect = [
+            ['foo'],
+            ['bar'],
+            dx.exceptions.DXError  # generic dxpy error
+        ]
+
+        with pytest.raises(dx.exceptions.DXError):
+            self.dx_manage.call_in_parallel(
+                mock_move,
+                items=[
+                    ('file-xx', 'folder-1'),
+                    ('file-yy', 'folder-2'),
+                    ('file-zz', 'folder-3')
+                ]
+            )
+
+
 class GetDetailsFromBatchJob(unittest.TestCase):
     """
     Tests function DXManage().get_details_from_batch_job which gets the
@@ -457,6 +509,37 @@ class TestMoveOneFile(unittest.TestCase):
             assert expected_print in stdout, (
                 "Info on file moved and folder info not printed as expected"
             )
+
+@patch('copy_test_data.DXManage.call_in_parallel')
+@patch('copy_test_data.DXManage.move_one_file')
+class TestMoveAlreadyCopiedFilesToCorrectFolder(unittest.TestCase):
+    """
+    Test function DXManage().move_already_copied_files_to_correct_folder()
+    which moves files to folders concurrently
+    """
+    def setUp(self):
+        # Set up a default mock args object
+        self.mock_args = MagicMock()
+        self.dx_manage = DXManage(self.mock_args)
+
+    def test_moving_files_in_parallel(self, mock_move, mock_parallel):
+        """
+        Test moving files in parallel called with correct args
+        """
+        self.dx_manage.move_already_copied_files_to_correct_folder(
+            [
+                ('file-xx', 'folder-1'),
+                ('file-yy', 'folder-2')
+            ]
+        )
+
+        mock_parallel.assert_called_once_with(
+            mock_move,
+            [
+                ('file-xx', 'folder-1'),
+                ('file-yy', 'folder-2')
+            ]
+        )
 
 
 class TestFindQCStatusFileInProject(unittest.TestCase):
