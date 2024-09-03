@@ -1,16 +1,10 @@
 import json
-import os
 import pytest
-import sys
 import unittest
 from unittest import mock
 from unittest.mock import patch, mock_open, MagicMock
 
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.realpath(__file__), '../../')
-))
-
-from get_production_config import DXManage, parse_args
+from get_production_config import DXManage
 
 
 class TestReadInConfig(unittest.TestCase):

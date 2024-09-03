@@ -1,17 +1,10 @@
-import argparse
 import dxpy as dx
-import os
 import pytest
-import sys
 import unittest
-from unittest import mock
 from unittest.mock import patch, MagicMock
 
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.realpath(__file__), '../../')
-))
+from check_jobs_complete import DXManage
 
-from check_jobs_complete import DXManage, parse_args
 
 @patch('check_jobs_complete.dx.DXJob')
 class TestGetJobOutputDetails(unittest.TestCase):
@@ -20,16 +13,14 @@ class TestGetJobOutputDetails(unittest.TestCase):
     gets details of the input to an eggd_dias_batch job and the jobs
     and analyses which it launches
     """
-    @classmethod
-    def setUpClass(cls):
-        sys.argv = [
-            'check_jobs_complete.py',
-            '-i', 'job-123',
-            '-o', 'job_command_info.txt'
-        ]
-        args = parse_args()
-
-        cls.dx_manage = DXManage(args)
+    def setUp(self):
+        """
+        Set up mock args and DXManage class
+        """
+        self.mock_args = MagicMock()
+        self.mock_args.job_id = 'job-123'
+        self.mock_args.outfile_name = 'job_command_info.txt'
+        self.dx_manage = DXManage(self.mock_args)
 
     @pytest.fixture(autouse=True)
     def capsys(self, capsys):
@@ -38,9 +29,10 @@ class TestGetJobOutputDetails(unittest.TestCase):
         """
         self.capsys = capsys
 
-    def test_wait_on_done(self, mock_job):
+    def test_outputs_and_calls_correct(self, mock_job):
         """
-        Test that function held until the eggd_dias_batch job completes
+        Test that function held until the eggd_dias_batch job completes,
+        outputs correct and print statements as expected
         """
         mock_job_instance = MagicMock()
         mock_job_instance.describe.return_value = {
@@ -126,6 +118,7 @@ class TestGetJobOutputDetails(unittest.TestCase):
                 'job-54321', 'job-67890', 'analysis-123'
             ], 'Launched jobs not returned correctly'
 
+
 @patch('check_jobs_complete.dx.DXAnalysis')
 @patch('check_jobs_complete.dx.DXJob')
 class TestWaitOnDone(unittest.TestCase):
@@ -133,16 +126,14 @@ class TestWaitOnDone(unittest.TestCase):
     Tests for the DXManage.wait_on_done() function which waits until all jobs
     and analyses launched by eggd_dias_batch complete successfully
     """
-    @classmethod
-    def setUpClass(cls):
-        sys.argv = [
-            'check_jobs_complete.py',
-            '-i', 'job-123',
-            '-o', 'job_command_info.txt'
-        ]
-        args = parse_args()
-
-        cls.dx_manage = DXManage(args)
+    def setUp(self):
+        """
+        Set up mock args and DXManage class
+        """
+        self.mock_args = MagicMock()
+        self.mock_args.job_id = 'job-123'
+        self.mock_args.outfile_name = 'job_command_info.txt'
+        self.dx_manage = DXManage(self.mock_args)
 
     def test_all_jobs_complete_successfully(
         self, mock_job, mock_analysis
@@ -151,9 +142,6 @@ class TestWaitOnDone(unittest.TestCase):
         Test wait_done() waits for all jobs and analyses to complete
         """
         launched_job_ids = ['job-123', 'analysis-123', 'job-345']
-
-        # mock_job.return_value.wait_on_done = MagicMock()
-        # mock_analysis.return_value.wait_on_done = MagicMock()
 
         mock_job_instance = MagicMock()
         mock_analysis_instance = MagicMock()
@@ -195,7 +183,7 @@ class TestWaitOnDone(unittest.TestCase):
 
     def test_correct_error_on_analysis_failing(self, mock_job, mock_analysis):
         """
-        If launched analysis fails, test this is caught and exits
+        If launched analysis fails, test this is caught and raised
         """
         launched_job_ids = ['job-123', 'analysis-123', 'job-345']
 

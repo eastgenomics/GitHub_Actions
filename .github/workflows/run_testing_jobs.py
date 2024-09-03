@@ -198,6 +198,11 @@ class DXManage():
             job for job in launched_list if job.startswith('job-')
         ]
 
+        assert launched_jobs, (
+            "Error: No jobs were launched by eggd_dias_batch job "
+            f"{self.args.assay_job_id} given"
+        )
+
         # Get any jobs with GATKgCNV in the name
         cnv_calling_jobs = [
             job for job in launched_jobs
@@ -276,6 +281,7 @@ class DXManage():
                     'state': 'terminated'
                 }
             }
+        ]
         """
         executions = list(dx.find_executions(
             project=self.args.test_project_id,
@@ -304,7 +310,9 @@ class DXManage():
         non_terminal_job_ids: list
             list with IDs of any jobs/analyses to terminate
         """
-        end_states = ['done', 'terminated', 'failed']
+        end_states = [
+            'done', 'terminated', 'failed', 'terminating', 'partially_failed'
+        ]
 
         # Get any jobs with non-end states
         if executions:
@@ -392,12 +400,16 @@ class DXManage():
             }
         ))
 
+        assert dias_single_analyses, (
+            f"Error: No Dias single job was found in the project {project_id}"
+            " given"
+        )
         # Get the unique versions of dias single used to generate all data
         # in the project
-        executable_versions = list(set([
+        executable_versions = sorted(list(set([
             analysis['describe']['executableName'].replace('dias_single_', '')
             for analysis in dias_single_analyses
-        ]))
+        ])))
 
         executable_info = '\n\t'.join(
             [version for version in executable_versions]
@@ -425,7 +437,8 @@ class DXManage():
 
         return executable_str
 
-    def find_multiqc_report_in_proj(self, project_id):
+    @staticmethod
+    def find_multiqc_report_in_proj(project_id):
         """
         Find the file ID of the MultiQC report to use as an input for the
         eggd_dias_batch test job we set off, otherwise the eggd_artemis job
