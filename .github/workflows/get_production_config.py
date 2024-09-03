@@ -65,26 +65,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def prettier_print(thing) -> None:
-    """
-    Pretty print for nicer viewing in the logs since pprint does not
-    do an amazing job visualising big dicts and long strings
-
-    Bonus: we're indenting using the Braille Pattern Blank U+2800
-    unicode character since the new DNAnexus UI (as of Dec. 2023)
-    strips leading tabs and spaces in the logs, which makes viewing
-    the pretty dicts terrible. Luckily they don't strip other
-    whitespace characters, so we can get around them yet again making
-    their UI worse.
-
-    Parameters
-    ----------
-    thing : anything json dumpable
-        thing to print
-    """
-    print(json.dumps(thing, indent='⠀⠀'))
-
-
 class DXManage():
     """
     Methods for generic handling of dx related things
@@ -130,8 +110,7 @@ class DXManage():
 
         return config_contents, assay
 
-    @staticmethod
-    def get_json_configs_in_DNAnexus(config_path) -> dict:
+    def get_json_configs_in_DNAnexus(self) -> dict:
         """
         Query path in DNAnexus for JSON config files, returning all unarchived
         config files found
@@ -155,13 +134,16 @@ class DXManage():
             Raised when no config files found at the given path
         """
         # searching dir for configs, check for valid project:path structure
-        assert re.match(r'project-[\d\w]*:/.*', config_path), (
-            f'Path to assay configs appears invalid: {config_path}'
+        assert re.match(r'project-[\d\w]*:/.*', self.args.config_path), (
+            f'Path to assay configs appears invalid: {self.args.config_path}'
         )
 
-        print(f"\n \nSearching following path for assay configs: {config_path}")
+        print(
+            "\n \nSearching following path for assay configs: "
+            f"{self.args.config_path}"
+        )
 
-        project, path = config_path.split(':')
+        project, path = self.args.config_path.split(':')
 
         config_files = list(dx.find_data_objects(
             name=".json$",
@@ -172,7 +154,7 @@ class DXManage():
         ))
 
         # Sense check we find config files
-        assert config_files, print(
+        assert config_files, (
             f"No config files found in given path: {project}:{path}"
         )
 
@@ -218,8 +200,8 @@ class DXManage():
         for file in config_files:
             if not file['describe']['archivalState'] == 'live':
                 print(
-                    "Config file not in live state - will not be used:"
-                    f"{file['describe']['name']} ({file['id']}"
+                    "Config file not in live state - will not be used: "
+                    f"{file['describe']['name']} ({file['id']})"
                 )
                 continue
 
@@ -303,7 +285,7 @@ class DXManage():
         }
 
         print("\n \nBatch configs that will be compared:")
-        prettier_print(config_matching_info)
+        print(config_matching_info)
 
         return config_matching_info
 
@@ -331,7 +313,7 @@ def main():
     dx_manage = DXManage(args)
 
     changed_config_contents, assay = dx_manage.read_in_config()
-    config_files = dx_manage.get_json_configs_in_DNAnexus(args.config_path)
+    config_files = dx_manage.get_json_configs_in_DNAnexus()
     prod_config = dx_manage.filter_highest_batch_config(
         config_files,
         assay
