@@ -310,7 +310,9 @@ class DXManage():
         non_terminal_job_ids: list
             list with IDs of any jobs/analyses to terminate
         """
-        end_states = ['done', 'terminated', 'failed']
+        end_states = [
+            'done', 'terminated', 'failed', 'terminating', 'partially_failed'
+        ]
 
         # Get any jobs with non-end states
         if executions:

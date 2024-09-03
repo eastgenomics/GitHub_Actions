@@ -41,6 +41,7 @@ class TestReadInConfig(unittest.TestCase):
             "dxid": "file-123"
         }
     }
+
     @patch('run_testing_jobs.json.load')
     @patch(
         'run_testing_jobs.open',
@@ -158,7 +159,6 @@ class TestGetCNVCallingJobID(unittest.TestCase):
         )
         with pytest.raises(AssertionError, match=expected_error):
             self.dx_manage.get_cnv_calling_job_id()
-
 
     @patch('run_testing_jobs.dx.DXJob')
     @patch('run_testing_jobs.dx.describe')
@@ -411,6 +411,20 @@ class TestFindNonTerminalJobs(unittest.TestCase):
                     'id': 'job-678',
                     'state': 'failed'
                 }
+            },
+            {
+                'id': 'job-910',
+                'describe': {
+                    'id': 'job-910',
+                    'state': 'terminating'
+                }
+            },
+            {
+                'id': 'job-111',
+                'describe': {
+                    'id': 'job-111',
+                    'state': 'partially_failed'
+                }
             }
         ]
 
@@ -435,6 +449,34 @@ class TestFindNonTerminalJobs(unittest.TestCase):
                 'describe': {
                     'id': 'job-123',
                     'state': 'done'
+                }
+            },
+            {
+                'id': 'job-910',
+                'describe': {
+                    'id': 'job-910',
+                    'state': 'terminating'
+                }
+            },
+            {
+                'id': 'job-111',
+                'describe': {
+                    'id': 'job-111',
+                    'state': 'partially_failed'
+                }
+            },
+            {
+                'id': 'job-333',
+                'describe': {
+                    'id': 'job-333',
+                    'state': 'terminated'
+                }
+            },
+            {
+                'id': 'job-678',
+                'describe': {
+                    'id': 'job-678',
+                    'state': 'failed'
                 }
             },
             {
@@ -463,7 +505,7 @@ class TestFindNonTerminalJobs(unittest.TestCase):
         )
 
         with self.subTest('Non-terminal jobs returned correctly'):
-            assert non_terminal_jobs == ['job-345','job-789'], (
+            assert non_terminal_jobs == ['job-345', 'job-789'], (
                 "Non-terminal jobs not returned correctly"
             )
 
@@ -802,7 +844,7 @@ class TestUpdateInputsToBatchJob(unittest.TestCase):
         """
         Test inputs updated correctly if no CNV job ID is given as an input
         """
-                # Mock describe response with mimimal inputs
+        # Mock describe response with mimimal inputs
         mock_describe.return_value = {
             'executableName': 'eggd_dias_batch',
             'input': {
@@ -954,6 +996,7 @@ class TestTerminate(unittest.TestCase):
             'Error in terminating job not correctly caught'
         )
 
+
 class TestSetOffTestJobs(unittest.TestCase):
     """
     Tests for DXManage().set_off_test_jobs() function which sets off a
@@ -1032,8 +1075,8 @@ class TestSetOffTestJobs(unittest.TestCase):
 
         with self.subTest('Job tagging called correctly'):
             mock_job.return_value.add_tags.assert_called_once_with(
-            tags=['GitHub Actions run ID: 1234']
-        )
+                tags=['GitHub Actions run ID: 1234']
+            )
 
 
 class TestWriteOutJobId(unittest.TestCase):

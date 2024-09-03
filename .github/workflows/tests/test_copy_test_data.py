@@ -44,7 +44,7 @@ class TestCallInParallel(unittest.TestCase):
         Test that if one of the moves raises an Exception that this
         is caught and raised
         """
-        # raise error one out of 4 of the _find calls
+        # raise error one out of 3 of the _find calls
         mock_move.side_effect = [
             ['foo'],
             ['bar'],
@@ -509,6 +509,7 @@ class TestMoveOneFile(unittest.TestCase):
             assert expected_print in stdout, (
                 "Info on file moved and folder info not printed as expected"
             )
+
 
 @patch('copy_test_data.DXManage.call_in_parallel')
 @patch('copy_test_data.DXManage.move_one_file')
