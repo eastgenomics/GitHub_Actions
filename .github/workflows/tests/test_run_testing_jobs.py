@@ -4,7 +4,6 @@ import pytest
 import re
 import unittest
 
-from unittest import mock
 from unittest.mock import patch, mock_open, MagicMock
 
 from run_testing_jobs import DXManage

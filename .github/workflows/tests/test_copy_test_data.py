@@ -4,7 +4,6 @@ import pytest
 import re
 import unittest
 
-from unittest import mock
 from unittest.mock import patch, MagicMock
 
 from copy_test_data import DXManage
@@ -21,13 +20,14 @@ class TestCallInParallel(unittest.TestCase):
     and inputs and calls the function in parallel
     """
     def setUp(self):
-        # Set up a default mock args object
+        # Set up a default mock args object to make class instance
         self.mock_args = MagicMock()
         self.dx_manage = DXManage(self.mock_args)
 
     def test_call_in_parallel(self, mock_move, mock_submit):
         """
-        Test function called in parallel
+        Test function called correct number of times, once for each of
+        the two inputs
         """
         self.dx_manage.call_in_parallel(
             mock_move,
@@ -35,8 +35,8 @@ class TestCallInParallel(unittest.TestCase):
         )
 
         assert mock_submit.call_count == 2, (
-            'Function not called correct number of times for '
-            'concurrent moving'
+            'Function not called correct number of times when '
+            'moving files concurrently'
         )
 
     def test_exceptions_caught_and_raised(self, mock_move, mock_submit):
@@ -64,7 +64,7 @@ class TestCallInParallel(unittest.TestCase):
 
 class GetDetailsFromBatchJob(unittest.TestCase):
     """
-    Tests function DXManage().get_details_from_batch_job which gets the
+    Tests function DXManage().get_details_from_batch_job() which gets the
     002 project ID and the input Dias single folder from an eggd_dias_batch
     job ID
     """
