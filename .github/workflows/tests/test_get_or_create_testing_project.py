@@ -112,7 +112,7 @@ class TestFindDXProject(unittest.TestCase):
         with pytest.raises(AssertionError, match=expected_error):
             self.dx_manage.find_dx_test_project()
 
-
+@patch('get_or_create_testing_project.dx.DXProject')
 class TestGetOrCreateDXProject(unittest.TestCase):
     """
     Test function DXManage().get_or_create_dx_test_project() which
@@ -136,7 +136,6 @@ class TestGetOrCreateDXProject(unittest.TestCase):
         """
         self.capsys = capsys
 
-    @patch('get_or_create_testing_project.dx.DXProject')
     def test_id_of_existing_project_returned_when_exists(self, mock_project):
         """
         Check that just the ID of the existing project is returned
@@ -193,8 +192,7 @@ class TestGetOrCreateDXProject(unittest.TestCase):
             mock_project.return_value.invite.assert_not_called()
 
     @patch('get_or_create_testing_project.datetime')
-    @patch('get_or_create_testing_project.dx.DXProject')
-    def test_new_project_created(self, mock_dx_project, mock_datetime):
+    def test_new_project_created(self, mock_datetime, mock_dx_project):
         """
         Test that a new project is created and its ID returned when
         no existing project is found
