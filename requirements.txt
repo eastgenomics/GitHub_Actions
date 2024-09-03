@@ -1,4 +1,6 @@
 dxpy==0.378.0
 icdiff==2.0.7
 packaging==21.3
+pytest==7.1.3
+pytest-cov==4.0.0
 setuptools==70.0.0
