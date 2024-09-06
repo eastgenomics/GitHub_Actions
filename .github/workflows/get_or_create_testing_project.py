@@ -58,6 +58,14 @@ def parse_args() -> argparse.Namespace:
         help="ID of this GitHub Actions run to name the output DX folder"
     )
 
+    parser.add_argument(
+        '-d',
+        '--development_mode',
+        default=False,
+        action='store_true',
+        help='Whether to name the 004 project as a development project'
+    )
+
     return parser.parse_args()
 
 
@@ -137,12 +145,18 @@ class DXManage():
             Raised when more than one 004 project found for given config name
         """
         changed_config_name = self.args.input_config.replace('.json', '')
+
+        if self.args.development_mode:
+            prefix = 'GitHub_Actions_development_'
+        else:
+            prefix = ''
+
         # Find existing project(s) beginning with 004, with a date in %y%m%d
         # format and includes the name of the updated config file
         existing_projects = list(
             dx.find_projects(
                 name=(
-                    '^004_[\d]{2}[\d]{2}[\d]{2}_GitHub_Actions_'
+                    f'^004_[\d]{2}[\d]{2}[\d]{2}_{prefix}'
                     f'{changed_config_name}.*$'
                 ),
                 name_mode='regexp',
@@ -190,11 +204,16 @@ class DXManage():
         changed_config_name = self.args.input_config.replace('.json', '')
 
         # If no 004 projs exist, create new proj with today's date + name of
-        # the config file. This includes 'GitHub_Actions' in the name for now
-        # but will be updated when the workflow is in production
+        # the config file. If run in development mode (i.e. for development
+        # of this workflow) includes a prefix in the project name created
         if not existing_projects:
+            if self.args.development_mode:
+                prefix = 'GitHub_Actions_development_'
+            else:
+                prefix = ''
+
             new_project_name = (
-                f"004_{datetime.now().strftime('%y%m%d')}_GitHub_Actions_"
+                f"004_{datetime.now().strftime('%y%m%d')}_{prefix}"
                 f"{changed_config_name}_testing"
             )
 
