@@ -28,7 +28,7 @@ on:
       test_sample_limit:
         description: 'Number of samples to test'
         required: true
-        type: number
+        type: string
       workflow_branch:
         description: 'The name of the branch to checkout in the reusable workflow repository'
         required: true
@@ -107,7 +107,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: eastgenomics/GitHub_Actions
-          ref: ${{ inputs.WORKFLOW_BRANCH }}
+          ref: ${{ inputs.workflow_branch }}
           path: reusable-workflow
 
       - name: Set up Python 3.8
