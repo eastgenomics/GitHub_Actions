@@ -1,8 +1,32 @@
 name: Perform integration testing
 on:
-  pull_request:
-
   workflow_call:
+    inputs:
+      config_path:
+        description: 'Path to the production config file in DNAnexus'
+        required: true
+        type: string
+      development:
+        description: 'Whether to run in development mode'
+        required: true
+        type: string
+      prod_jobs:
+        description: 'Dictionary of production job IDs for each assay'
+        required: true
+        type: string
+      run_cnv_calling:
+        description: 'Whether to re-run CNV calling or re-use a previous CNV calling job'
+        required: true
+        type: string
+      test_sample_limit:
+        description: 'Number of samples to test'
+        required: true
+        type: string
+      workflow_branch:
+        description: 'The name of the branch to checkout in the reusable workflow repository'
+        required: true
+        type: string
+
     secrets:
       DX_TOKEN:
         description: 'DNAnexus token'
@@ -58,7 +82,7 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
-            Either no or multiple config files were updated in this PR. Skipping uploading and automated testing.
+            Multiple config files were updated in this PR. Skipping uploading and automated testing.
 
   upload_and_test:
     needs: get_changed_json_files
@@ -76,7 +100,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: eastgenomics/GitHub_Actions
-          ref: IN-727_check_jobs
+          ref: ${{ inputs.workflow_branch }}
           path: reusable-workflow
 
       - name: Set up Python 3.8
@@ -97,13 +121,22 @@ jobs:
         run: |
           echo "${CHANGED_FILE} was changed in this PR"
           dx login --token ${{ secrets.DX_TOKEN }} --noprojects
-          python reusable-workflow/.github/workflows/get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_info.json -u ${ACTIONS_RUN_URL} -r ${{ github.run_id }}
+
+          if [ ${{ inputs.DEVELOPMENT }} == "True" ];
+          then
+            EXTRA_ARG="--development_mode"
+          else
+            EXTRA_ARG=""
+          fi
+
+          python reusable-workflow/.github/workflows/get_or_create_testing_project.py -i ${CHANGED_FILE} -o dx_project_info.json -u ${ACTIONS_RUN_URL} -r ${{ github.run_id }} ${EXTRA_ARG}
+
           TEST_PROJ_ID=$(jq -r .project_id dx_project_info.json)
           FOLDER_NAME=$(jq -r .folder_name dx_project_info.json)
           echo "TEST_PROJ_ID=$TEST_PROJ_ID" >> $GITHUB_OUTPUT
           echo "FOLDER_NAME=$FOLDER_NAME" >> $GITHUB_OUTPUT
 
-      - name: Upload changed JSON config file to testing_project
+      - name: Upload changed JSON config file to testing project
         env:
           TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
           FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
@@ -122,7 +155,7 @@ jobs:
         run: |
           PREFIX="project-"
           PROJ_ID=${TEST_PROJ_ID#"$PREFIX"}
-          DX_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/data/${FOLDER_NAME}/?id.values=${UPLOADED_FILE_ID}"
+          DX_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/data${FOLDER_NAME}/?id.values=${UPLOADED_FILE_ID}"
           body="Updated configuration file ${CHANGED_FILE} uploaded to DNAnexus 004 test project: $DX_URL"
           echo "body=$body" >> $GITHUB_OUTPUT
 
@@ -138,7 +171,7 @@ jobs:
         env:
           UPLOADED_FILE_ID: ${{ steps.upload-config.outputs.FILE_ID }}
         run: |
-          python reusable-workflow/.github/workflows/get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ vars.CONFIG_PATH }}
+          python reusable-workflow/.github/workflows/get_production_config.py -i ${CHANGED_FILE} -f ${UPLOADED_FILE_ID} -p ${{ inputs.CONFIG_PATH }}
 
       - name: Generate diff report compared to production config
         id: generate-diff
@@ -190,7 +223,7 @@ jobs:
           TEST_PROJ_ID: ${{ steps.get-create-project.outputs.TEST_PROJ_ID }}
           FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
         run: |
-          PROD_JOB_ID=$(echo ${{ vars.PROD_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
+          PROD_JOB_ID=$(echo ${{ inputs.PROD_JOBS }} | jq -r --arg key "$ASSAY" '.[$key]')
           echo "Copying test data from 002 project which was used for ${ASSAY} job set (${TEST_PROJ_ID}) over to 004 testing project ${TEST_PROJ_ID}"
 
           python reusable-workflow/.github/workflows/copy_test_data.py -t ${TEST_PROJ_ID} -j ${PROD_JOB_ID} -f ${FOLDER_NAME} -r ${{ github.run_id }}
@@ -208,14 +241,14 @@ jobs:
           echo "Current release version of eggd_dias_single_workflow GitHub repository is ${RELEASE_VERSION}"
           echo "Running testing jobs for assay ${ASSAY} using inputs from previous production job ID ${PROD_JOB_ID}"
 
-          if [ ${{ vars.RUN_CNV_CALLING }} == "True" ];
+          if [ ${{ inputs.RUN_CNV_CALLING }} == "True" ];
           then
             EXTRA_ARG="--run_cnv_calling"
           else
             EXTRA_ARG=""
           fi
 
-          python reusable-workflow/.github/workflows/run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -a ${ASSAY} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ vars.TEST_SAMPLE_LIMIT }} -i ${{ github.run_id }} -f ${FOLDER_NAME} -o job_id.txt ${EXTRA_ARG}
+          python reusable-workflow/.github/workflows/run_testing_jobs.py -c config_diff.json -t ${TEST_PROJ_ID} -a ${ASSAY} -j ${PROD_JOB_ID} -v ${RELEASE_VERSION} -l ${{ inputs.TEST_SAMPLE_LIMIT }} -i ${{ github.run_id }} -f ${FOLDER_NAME} -o job_id.txt ${EXTRA_ARG}
 
           JOB_ID=$(cat job_id.txt)
           echo "JOB_ID=$JOB_ID" >> $GITHUB_OUTPUT

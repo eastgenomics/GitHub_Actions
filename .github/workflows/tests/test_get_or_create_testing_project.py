@@ -148,6 +148,7 @@ class TestGetOrCreateDXProject(unittest.TestCase):
             'https://github.com/eastgenomics/GitHub_Actions/actions/runs/1234'
         )
         self.mock_args.run_id = '1234'
+        self.mock_args.development_mode = True
         self.dx_manage = DXManage(self.mock_args)
 
     @pytest.fixture(autouse=True)
@@ -171,8 +172,8 @@ class TestGetOrCreateDXProject(unittest.TestCase):
                 'describe': {
                     'id': 'project-123',
                     'name': (
-                        '004_240731_GitHub_Actions_dias_TWE_config_GRCh37_'
-                        'v3.1.7_testing'
+                        '004_240731_GitHub_Actions_development_dias_TWE_'
+                        'config_GRCh37_v3.1.7_testing'
                     ),
                     'created': 1722432666000,
                     'createdBy': {'user': 'user-locker'}
@@ -196,9 +197,9 @@ class TestGetOrCreateDXProject(unittest.TestCase):
 
             expected_print = (
                 "Project for testing the updated config file already exists: "
-                "\n004_240731_GitHub_Actions_dias_TWE_config_GRCh37_v3.1.7"
-                "_testing (project-123) - created by user-locker on "
-                "2024-07-31.\nUpdated config will be uploaded to existing"
+                "\n004_240731_GitHub_Actions_development_dias_TWE_config_"
+                "GRCh37_v3.1.7_testing (project-123) - created by user-locker "
+                "on 2024-07-31.\nUpdated config will be uploaded to existing"
                 " test project project-123\n"
             )
 
@@ -236,7 +237,10 @@ class TestGetOrCreateDXProject(unittest.TestCase):
 
         with self.subTest('DXProject.new called with correct inputs'):
             mock_dx_project.return_value.new.assert_called_once_with(
-                name='004_240823_GitHub_Actions_changed_config_v1_testing',
+                name=(
+                    '004_240823_GitHub_Actions_development_changed_config'
+                    '_v1_testing'
+                ),
                 summary='Project for testing changes in changed_config_v1',
                 description=(
                     "This project was created automatically by GitHub Actions"
@@ -252,7 +256,7 @@ class TestGetOrCreateDXProject(unittest.TestCase):
             expected_new_proj_print = (
                 "\n004 project for updated config does not exist. Created"
                 " new project for testing: 004_240823_GitHub_Actions"
-                "_changed_config_v1_testing (new-project-id)"
+                "_development_changed_config_v1_testing (new-project-id)"
             )
 
             assert expected_new_proj_print in stdout, (
