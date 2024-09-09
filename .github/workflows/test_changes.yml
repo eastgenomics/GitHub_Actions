@@ -1,12 +1,5 @@
 name: Perform integration testing
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-    paths:
-      - '**/*.json'
-
   workflow_call:
     inputs:
       config_path:
@@ -162,7 +155,7 @@ jobs:
         run: |
           PREFIX="project-"
           PROJ_ID=${TEST_PROJ_ID#"$PREFIX"}
-          DX_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/data/${FOLDER_NAME}/?id.values=${UPLOADED_FILE_ID}"
+          DX_URL="https://platform.dnanexus.com/projects/${PROJ_ID}/data${FOLDER_NAME}/?id.values=${UPLOADED_FILE_ID}"
           body="Updated configuration file ${CHANGED_FILE} uploaded to DNAnexus 004 test project: $DX_URL"
           echo "body=$body" >> $GITHUB_OUTPUT
 
