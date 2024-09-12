@@ -45,7 +45,57 @@ class TestFindDXProject(unittest.TestCase):
         # Set up a default mock args object
         self.mock_args = MagicMock()
         self.mock_args.input_config = 'changed_config.json'
+        self.mock_args.development_mode = True
         self.dx_manage = DXManage(self.mock_args)
+
+    @patch('get_or_create_testing_project.dx.find_projects')
+    def test_dx_find_projects_called_with_correct_args_in_development(
+        self, mock_find
+    ):
+        """
+        Test that the regex string is passed correctly to dx.find_projects
+        when development set to True
+        """
+        mock_find.return_value = []
+
+        self.dx_manage.find_dx_test_project()
+
+        mock_find.assert_called_once_with(
+            name="^004_[\\d]{6}_GitHub_Actions_development_changed_config.*$",
+            name_mode='regexp',
+            describe={
+                'fields': {
+                    'name': True,
+                    'created': True,
+                    'createdBy': True
+                }
+            }
+        )
+
+    @patch('get_or_create_testing_project.dx.find_projects')
+    def test_dx_find_projects_called_with_correct_args_not_development(
+        self, mock_find
+    ):
+        """
+        Test that the regex string is passed correctly to dx.find_projects
+        when development set to False
+        """
+        self.mock_args.development_mode = False
+        mock_find.return_value = []
+
+        self.dx_manage.find_dx_test_project()
+
+        mock_find.assert_called_once_with(
+            name="^004_[\\d]{6}_changed_config.*$",
+            name_mode='regexp',
+            describe={
+                'fields': {
+                    'name': True,
+                    'created': True,
+                    'createdBy': True
+                }
+            }
+        )
 
     @patch('get_or_create_testing_project.dx.find_projects')
     def test_dx_find_project(self, mock_find):
@@ -61,8 +111,8 @@ class TestFindDXProject(unittest.TestCase):
                 'describe': {
                     'id': 'project-Gpb3k6Q4PZYxVz9pzXvK82Xy',
                     'name': (
-                        '004_240731_GitHub_Actions_dias_TWE_config_GRCh37_'
-                        'v3.1.7_testing'
+                        '004_240731_GitHub_Actions_development_dias_TWE_'
+                        'config_GRCh37_v3.1.7_testing'
                     ),
                     'created': 1722432666000,
                     'createdBy': {'user': 'user-locker'}
