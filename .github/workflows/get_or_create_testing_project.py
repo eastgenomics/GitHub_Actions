@@ -156,8 +156,8 @@ class DXManage():
         existing_projects = list(
             dx.find_projects(
                 name=(
-                    f'^004_[\d]{2}[\d]{2}[\d]{2}_{prefix}'
-                    f'{changed_config_name}.*$'
+                    fr'^004_[\d]{{6}}_{prefix}'
+                    fr'{changed_config_name}.*$'
                 ),
                 name_mode='regexp',
                 describe={
