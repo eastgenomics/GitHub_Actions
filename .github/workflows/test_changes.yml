@@ -142,7 +142,7 @@ jobs:
           FOLDER_NAME: ${{ steps.get-create-project.outputs.FOLDER_NAME }}
         id: upload-config
         run: |
-          FILE_ID=$(dx upload ${CHANGED_FILE} --destination ${TEST_PROJ_ID}:/${FOLDER_NAME}/ --brief)
+          FILE_ID=$(dx upload ${CHANGED_FILE} --destination ${TEST_PROJ_ID}:/${FOLDER_NAME}/ --wait --brief)
           echo "Config file uploaded to DNAnexus project ${TEST_PROJ_ID}. File ID: $FILE_ID"
           echo "FILE_ID=$FILE_ID" >> $GITHUB_OUTPUT
 
